@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Remy'a Screen Capture
+Comment=Screen capture tool for Hyprland
+Exec=remya_screen_capture
+Icon=top.remya.screen_capture
+Terminal=false
+Categories=Utility;Graphics;
+StartupWMClass=top.remya.screen_capture

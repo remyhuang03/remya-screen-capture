@@ -1,0 +1,25 @@
+name: remya_screen_capture
+description: "A Material Design 3 Expressive screen capture tool for Hyprland on Linux."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.5.0
+  flutter_rust_bridge: 2.13.0
+  remya_settings_client:
+    path: ../remya-settings/packages/remya_settings_client
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - LICENSE
