@@ -59,4 +59,6 @@
 - Develop and validate on a separate branch using `<type>/<short-description>` with lowercase words and hyphens.
 - Follow Conventional Commits: `<type>(<scope>): <description>`. Use a lowercase imperative description without a final period; mark breaking changes with `!` or a `BREAKING CHANGE:` footer.
 - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, and `revert`.
+- Inspect diffs, stage only intended paths, and preserve unrelated changes.
 - Commit approval is mandatory: show completed changes and validation results before requesting explicit user review approval to run `git commit`.
+- Approval to commit also authorizes delivery of the approved work. Merge each ready branch into `main`, push `main` to `origin`, and verify the remote ref after delivery. Remove delivered local branches and their clean worktrees once they are fully merged. Obtain approval before merging or pushing.
