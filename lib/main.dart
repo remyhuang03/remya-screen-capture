@@ -10,6 +10,9 @@ void main() {
     yield LicenseEntryWithLineBreaks([
       "Remy'a Screen Capture",
     ], await rootBundle.loadString('LICENSE'));
+    yield LicenseEntryWithLineBreaks([
+      'Google Material Symbols Rounded',
+    ], await rootBundle.loadString('assets/licenses/material-symbols.txt'));
   });
   runApp(const RemyaScreenCaptureApp());
 }

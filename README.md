@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue" alt="License">
 </p>
 
-Project skeleton for a **Hyprland screen capture tool on Linux**. No capture UI, system capability detection, or screenshot functionality is implemented yet.
+**Hyprland screen capture tool for Linux.** The app currently opens an interactive preview of the shared capture controls. Screenshot, recording and editor workflows are pending.
 
 ## Tech Stack & Architecture
 
@@ -20,8 +20,8 @@ Project skeleton for a **Hyprland screen capture tool on Linux**. No capture UI,
 - **FFI selection**: `flutter_rust_bridge` `2.13.0`. Add bridge configuration and generated bindings when a concrete backend API is needed.
 - **Settings integration**: Public `remya_settings_client` package, reserved for future integration.
 - **Structure**:
-  - `lib/main.dart` and `lib/app.dart`: Minimal startup and blank application shell.
-  - `lib/features/<feature>/`: Future feature UI, state, and data access.
+  - `lib/main.dart` and `lib/app.dart`: Startup, theme and component preview entry point.
+  - `lib/features/capture_controls/`: Reusable capture widgets and their interactive preview.
   - `lib/src/rust/core/`: Empty Rust core crate; no native library is built into the app yet.
   - `linux/`: Linux GTK runner and desktop packaging.
   - `assets/icons/`: Application icon.

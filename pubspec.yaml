@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   material_ui: ^1.5.0
+  flutter_svg: ^2.3.2
   flutter_rust_bridge: 2.13.0
   remya_settings_client:
     path: ../remya-settings/packages/remya_settings_client
@@ -23,3 +24,5 @@ flutter:
   uses-material-design: true
   assets:
     - LICENSE
+    - assets/icons/capture/
+    - assets/licenses/material-symbols.txt
