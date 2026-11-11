@@ -1,9 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 
-import 'features/capture_controls/capture_controls_preview.dart';
-
 class RemyaScreenCaptureApp extends StatelessWidget {
-  const RemyaScreenCaptureApp({super.key});
+  const RemyaScreenCaptureApp({super.key, required this.home});
+
+  final Widget home;
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +15,8 @@ class RemyaScreenCaptureApp extends StatelessWidget {
         colorScheme: const ColorScheme.dark(
           primary: Color(0xffd0bcff),
           onPrimary: Color(0xff381e72),
+          primaryContainer: Color(0xff4f378b),
+          onPrimaryContainer: Color(0xffeaddff),
           secondaryContainer: Color(0xff4a4458),
           onSecondaryContainer: Color(0xffe8def8),
           errorContainer: Color(0xff8c1d18),
@@ -32,7 +34,7 @@ class RemyaScreenCaptureApp extends StatelessWidget {
           onInverseSurface: Color(0xff322f35),
         ),
       ),
-      home: const CaptureControlsPreview(),
+      home: home,
     );
   }
 }

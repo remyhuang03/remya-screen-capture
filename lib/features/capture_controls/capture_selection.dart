@@ -10,12 +10,14 @@ class CaptureSelection extends StatefulWidget {
     super.key,
     required this.rect,
     required this.onChanged,
+    this.nudgeUnit = const Offset(1, 1),
   });
 
   static const minimumExtent = 24.0;
 
   final Rect rect;
   final ValueChanged<Rect>? onChanged;
+  final Offset nudgeUnit;
 
   @override
   State<CaptureSelection> createState() => _CaptureSelectionState();
@@ -70,7 +72,12 @@ class _CaptureSelectionState extends State<CaptureSelection> {
           actions: {
             _Nudge: CallbackAction<_Nudge>(
               onInvoke: (intent) {
-                widget.onChanged?.call(_move(rect, bounds, intent.delta));
+                final unit = widget.nudgeUnit;
+                final delta = Offset(
+                  intent.delta.dx * unit.dx,
+                  intent.delta.dy * unit.dy,
+                );
+                widget.onChanged?.call(_move(rect, bounds, delta));
                 return null;
               },
             ),
@@ -141,14 +148,18 @@ class _CaptureSelectionState extends State<CaptureSelection> {
           _focusNode.requestFocus();
           _drag = (
             rect: widget.rect,
-            origin: details.globalPosition,
+            origin: (context.findRenderObject()! as RenderBox).globalToLocal(
+              details.globalPosition,
+            ),
             handle: handle,
           );
         },
         onPanUpdate: (details) {
           final drag = _drag;
           if (drag == null || drag.handle != handle) return;
-          final delta = details.globalPosition - drag.origin;
+          final position = (context.findRenderObject()! as RenderBox)
+              .globalToLocal(details.globalPosition);
+          final delta = position - drag.origin;
           final next = handle == null
               ? _move(drag.rect, bounds, delta)
               : _resize(

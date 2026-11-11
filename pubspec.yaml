@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   material_ui: ^1.5.0
   flutter_svg: ^2.3.2
+  file_selector: ^1.1.0
   flutter_rust_bridge: 2.13.0
   remya_settings_client:
     path: ../remya-settings/packages/remya_settings_client
@@ -26,3 +27,4 @@ flutter:
     - LICENSE
     - assets/icons/capture/
     - assets/licenses/material-symbols.txt
+    - lib/src/rust/capture/THIRD_PARTY_NOTICES.txt

@@ -4,16 +4,19 @@ import 'package:material_ui/material_ui.dart';
 import 'package:remya_screen_capture/app.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_buttons.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_color_picker.dart';
+import 'package:remya_screen_capture/features/capture_controls/capture_controls_preview.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_icon.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_selection.dart';
 
 void main() {
+  const preview = RemyaScreenCaptureApp(home: CaptureControlsPreview());
+
   testWidgets('Preview opens and loads every design icon', (tester) async {
     tester.view.physicalSize = const Size(1019, 2300);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const RemyaScreenCaptureApp());
+    await tester.pumpWidget(preview);
     await tester.pumpAndSettle();
 
     expect(find.text('Components · Remya Screen Capture'), findsOneWidget);
@@ -32,7 +35,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const RemyaScreenCaptureApp());
+    await tester.pumpWidget(preview);
     await tester.pumpAndSettle();
 
     expect(find.text('Window'), findsOneWidget);
@@ -43,7 +46,7 @@ void main() {
   testWidgets('Preview updates toggle, segment and dropdown selections', (
     tester,
   ) async {
-    await tester.pumpWidget(const RemyaScreenCaptureApp());
+    await tester.pumpWidget(preview);
 
     final pen = find.byWidgetPredicate(
       (widget) => widget is CaptureIconButton && widget.label == 'Pen',

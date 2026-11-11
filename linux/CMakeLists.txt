@@ -104,6 +104,26 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+find_program(CARGO_EXECUTABLE cargo REQUIRED)
+get_filename_component(RUST_WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+set(RUST_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/rust")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(RUST_PROFILE_DIR debug)
+else()
+  set(RUST_PROFILE_DIR release)
+  set(RUST_PROFILE_FLAG --release)
+endif()
+set(CAPTURE_LIBRARY "${RUST_TARGET_DIR}/${RUST_PROFILE_DIR}/libremya_capture.so")
+add_custom_target(remya_capture ALL
+  COMMAND "${CARGO_EXECUTABLE}" build --locked -p remya_capture
+    --target-dir "${RUST_TARGET_DIR}" ${RUST_PROFILE_FLAG}
+  WORKING_DIRECTORY "${RUST_WORKSPACE}"
+  BYPRODUCTS "${CAPTURE_LIBRARY}"
+  USES_TERMINAL VERBATIM)
+add_dependencies(${BINARY_NAME} remya_capture)
+install(FILES "${CAPTURE_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
