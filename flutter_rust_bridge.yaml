@@ -1,0 +1,11 @@
+rust_input: crate::api
+rust_root: lib/src/rust/capture
+rust_output: lib/src/rust/capture/src/frb_generated.rs
+dart_output: lib/src/rust_bridge
+dart_entrypoint_class_name: ScreenshotRustLib
+web: false
+dart_format: false
+dart_fix: false
+auto_upgrade_dependency: false
+stop_on_error: true
+add_mod_to_lib: false

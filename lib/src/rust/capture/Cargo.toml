@@ -1,0 +1,22 @@
+[package]
+name = "remya_capture"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["bridge"]
+bridge = []
+
+[dependencies]
+anyhow = "1"
+flutter_rust_bridge = { version = "=2.13.0", default-features = false, features = ["anyhow", "dart-opaque", "rust-async", "thread-pool"] }
+image = { version = "0.25", default-features = false, features = ["png", "pnm"] }
+tempfile = "3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
