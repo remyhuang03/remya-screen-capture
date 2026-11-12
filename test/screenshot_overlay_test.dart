@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:remya_screen_capture/features/capture_controls/capture_buttons.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_labels.dart';
 import 'package:remya_screen_capture/features/screenshot/capture_geometry.dart';
 import 'package:remya_screen_capture/features/screenshot/capture_overlay.dart';

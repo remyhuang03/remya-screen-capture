@@ -10,6 +10,8 @@ class CaptureMonitor {
       focused = data['focused'] as bool,
       workspace = (data['activeWorkspace'] as Map)['id'] as int,
       specialWorkspace = (data['specialWorkspace'] as Map)['id'] as int? ?? 0,
+      scale = (data['scale'] as num).toDouble(),
+      pixelSize = _monitorPixelSize(data),
       bounds = _monitorBounds(data);
 
   final int id;
@@ -17,18 +19,26 @@ class CaptureMonitor {
   final bool focused;
   final int workspace;
   final int specialWorkspace;
+  final double scale;
+  final Size pixelSize;
   final Rect bounds;
 
   static Rect _monitorBounds(Map<String, dynamic> data) {
     final scale = data['scale'] as num;
-    final rotated = (data['transform'] as int).isOdd;
-    final width = data[rotated ? 'height' : 'width'] as num;
-    final height = data[rotated ? 'width' : 'height'] as num;
+    final size = _monitorPixelSize(data);
     return .fromLTWH(
       (data['x'] as num).toDouble(),
       (data['y'] as num).toDouble(),
-      (width / scale).roundToDouble(),
-      (height / scale).roundToDouble(),
+      (size.width / scale).roundToDouble(),
+      (size.height / scale).roundToDouble(),
+    );
+  }
+
+  static Size _monitorPixelSize(Map<String, dynamic> data) {
+    final rotated = (data['transform'] as int).isOdd;
+    return Size(
+      (data[rotated ? 'height' : 'width'] as num).toDouble(),
+      (data[rotated ? 'width' : 'height'] as num).toDouble(),
     );
   }
 }

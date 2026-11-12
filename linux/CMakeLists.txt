@@ -72,6 +72,8 @@ set_target_properties(${BINARY_NAME}
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+# media_kit_video can use the system libmpv and libepoxy on Linux.
+set(MEDIA_KIT_LIBS_AVAILABLE TRUE)
 include(flutter/generated_plugins.cmake)
 
 # === Installation ===

@@ -43,6 +43,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('A full-width dropdown puts its arrow at the trailing edge', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 260,
+              child: CaptureDropdown(
+                label: 'Resolution',
+                options: const {0: 'Original · 2560 × 1600'},
+                value: 0,
+                onChanged: (_) {},
+                fillWidth: true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final button = tester.getRect(find.byType(FilledButton));
+    final label = tester.getRect(find.text('Original · 2560 × 1600'));
+    final arrow = tester.getRect(find.byType(CaptureIcon));
+    expect(label.left - button.left, 12);
+    expect(button.right - arrow.right, 8);
+  });
+
   testWidgets('Preview updates toggle, segment and dropdown selections', (
     tester,
   ) async {

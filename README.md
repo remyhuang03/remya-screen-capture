@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue" alt="License">
 </p>
 
-**Hyprland screen capture and annotation tool for Linux.** Capture a display, an individual window, a region, or a vertically scrolling area. Copy and save a PNG, or open the capture in the editor to annotate and crop it.
+**Hyprland screen capture and annotation tool for Linux.** Capture a display, an individual window, a region, or a vertically scrolling area. Record a display or region, then trim and export the video.
 
 ## Screenshots
 
@@ -26,11 +26,25 @@ To use Super+Shift+S, add this binding to your Hyprland configuration. Use the i
 hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd("remya_screen_capture"))
 ```
 
+## Screen recordings
+
+- Run `remya_screen_capture --record`. Click a display to select it or drag to select a region. Choose system audio, microphone, and cursor visibility. Press **Enter** to start the countdown or **Esc** to cancel.
+- Pause or stop from the recording toolbar. Drag the timer to move the toolbar between displays. Dock it against a screen edge and move the pointer away to hide it. Hover at the docked edge to show it again. Visible controls, marker strokes, and laser trails inside the recorded area are captured. In marker mode, **[ / ]** adjust the stroke width and **Ctrl+Backspace** clears the drawing.
+- Remya saves the original in `Recordings` inside your XDG Videos directory. The editor opens automatically. Use **Space** to play, **← / →** to seek five seconds, **, / .** to step frames, and **I / O** to set the trim range.
+- Export to MP4, WebM, GIF, or MKV. The source retains separate system and microphone tracks. When both tracks are enabled at export, the output contains a single mix.
+
+Use **Super+R** to open the selector, cancel a countdown, or stop recording. Use an absolute executable path if the app is outside the session's `PATH`.
+
+```lua
+hl.bind("SUPER + R", hl.dsp.exec_cmd("remya_screen_capture --record"))
+```
+
 ## Tech Stack & Architecture
 
 - **Flutter**: `3.47.9` pinned via FVM, with Material Design 3 Expressive (`material_ui: ^1.5.0`).
 - **Rust**: `2024` edition, managed as a Cargo workspace with the root `rust-toolchain.toml`.
 - **FFI**: `flutter_rust_bridge` `2.13.0`. The Linux build bundles the Rust screenshot library.
+- **Recording and video**: System GPU Screen Recorder for capture, libmpv for preview, and FFmpeg for export.
 - **Settings integration**: Public `remya_settings_client` package, reserved for future integration.
 - **Structure**:
   - `lib/main.dart` and `lib/app.dart`: Startup and theme.
@@ -49,6 +63,8 @@ hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd("remya_screen_capture"))
 - Flutter Linux build dependencies
 - Hyprland Wayland session with `grim` 1.5.0 or newer and support for foreign-toplevel image capture. The target is Hyprland 0.57.2.
 - On Arch, install the capture and native build dependencies with `sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols`.
+- For recording and video editing on Arch, install `gpu-screen-recorder ffmpeg mpv libepoxy` and use PipeWire or PulseAudio for audio capture. The recording backend needs `gsr-cli` and the first-frame timestamp option from GPU Screen Recorder 6.1.7 or newer. The normal distro package supplies the KMS helper. Hardware encoding is optional, with H.264 CPU encoding as a fallback on systems where GPU Screen Recorder can capture the display.
+- Turning off **Show cursor** disables cursor capture in GPU Screen Recorder. A software cursor that Hyprland has already drawn into the desktop image can still appear in the video.
 - Inter system font and fontconfig for installation (Arch: `sudo pacman -S inter-font fontconfig`)
 - A sibling `../remya-settings` checkout providing `packages/remya_settings_client`
 

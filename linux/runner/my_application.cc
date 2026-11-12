@@ -1,5 +1,7 @@
 #include "my_application.h"
 
+#include <clocale>
+
 #include "capture_windows.h"
 
 struct _MyApplication {
@@ -11,6 +13,8 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 static void my_application_activate(GApplication* application) {
   auto* self = MY_APPLICATION(application);
+  // GTK sets the process locale at startup. libmpv requires C numeric parsing.
+  std::setlocale(LC_NUMERIC, "C");
   start_capture_windows(GTK_APPLICATION(application),
                         self->dart_entrypoint_arguments);
 }

@@ -291,28 +291,6 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
   );
 }
 
-class CaptureSurface extends StatelessWidget {
-  const CaptureSurface({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainer,
-      elevation: 6,
-      shadowColor: Colors.black54,
-      shape: RoundedRectangleBorder(
-        borderRadius: .circular(30),
-        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .5)),
-      ),
-      clipBehavior: .antiAlias,
-      child: Padding(padding: const .all(9), child: child),
-    );
-  }
-}
-
 class _ModeToolbar extends StatelessWidget {
   const _ModeToolbar({required this.mode, required this.onChanged});
 

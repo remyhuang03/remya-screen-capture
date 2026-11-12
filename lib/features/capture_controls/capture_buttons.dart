@@ -217,12 +217,14 @@ class CaptureDropdown<T extends Object> extends StatefulWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    this.fillWidth = false,
   });
 
   final String label;
   final Map<T, String> options;
   final T value;
   final ValueChanged<T>? onChanged;
+  final bool fillWidth;
 
   @override
   State<CaptureDropdown<T>> createState() => _CaptureDropdownState<T>();
@@ -274,7 +276,8 @@ class _CaptureDropdownState<T extends Object>
             fontSize: 13,
           ),
           child: Row(
-            mainAxisSize: .min,
+            mainAxisSize: widget.fillWidth ? .max : .min,
+            mainAxisAlignment: .spaceBetween,
             spacing: 4,
             children: [
               Flexible(
@@ -363,3 +366,25 @@ ButtonStyle _style(
     TextStyle(fontSize: fontSize, fontWeight: .w500, letterSpacing: 0),
   ),
 );
+
+class CaptureSurface extends StatelessWidget {
+  const CaptureSurface({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surfaceContainer,
+      elevation: 6,
+      shadowColor: Colors.black54,
+      shape: RoundedRectangleBorder(
+        borderRadius: .circular(30),
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .5)),
+      ),
+      clipBehavior: .antiAlias,
+      child: Padding(padding: const .all(9), child: child),
+    );
+  }
+}

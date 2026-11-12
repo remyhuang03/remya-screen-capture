@@ -6,7 +6,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../capture_controls/capture_buttons.dart';
 import '../capture_controls/capture_icon.dart';
-import 'capture_overlay.dart';
 
 typedef CaptureReceipt = ({
   bool copied,

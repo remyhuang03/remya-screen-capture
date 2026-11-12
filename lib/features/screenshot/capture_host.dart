@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show ExternalLibrary;
 import 'package:material_ui/material_ui.dart';
 
-import '../../app.dart';
+import '../../capture_windows.dart';
 import '../../src/rust_bridge/api.dart' as rust;
 import '../../src/rust_bridge/frb_generated.dart';
 import '../capture_controls/capture_buttons.dart';
@@ -19,8 +19,6 @@ import 'capture_geometry.dart';
 import 'capture_overlay.dart';
 import 'capture_result.dart';
 import 'capture_session.dart';
-
-const _native = MethodChannel('top.remya.screen_capture/windows');
 
 class CaptureHost extends StatefulWidget {
   const CaptureHost({super.key});
@@ -53,7 +51,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _native.setMethodCallHandler(_nativeEvent);
+    captureWindows.setMethodCallHandler(_nativeEvent);
     unawaited(_start());
   }
 
@@ -67,7 +65,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _native.setMethodCallHandler(null);
+    captureWindows.setMethodCallHandler(null);
     _closeRequests.dispose();
     _resultImage?.dispose();
     _disposeSession();
@@ -80,17 +78,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   }
 
   @override
-  Widget build(BuildContext context) => ViewCollection(
-    views: [
-      for (final view in WidgetsBinding.instance.platformDispatcher.views)
-        if (_widgets[view.viewId] case final home?)
-          View(
-            key: ValueKey(view.viewId),
-            view: view,
-            child: RemyaScreenCaptureApp(home: home),
-          ),
-    ],
-  );
+  Widget build(BuildContext context) => CaptureViews(_widgets);
 
   Future<Object?> _nativeEvent(MethodCall call) async {
     switch (call.method) {
@@ -128,10 +116,12 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       final editor = _editorView;
       if (_errorVisible && editor != null) {
         _errorVisible = false;
-        await _window('hide', editor);
+        await changeCaptureWindow('hide', editor);
       }
       await _backend;
-      final connected = await _native.invokeListMethod<String>('outputs');
+      final connected = await captureWindows.invokeListMethod<String>(
+        'outputs',
+      );
       final monitors = (await readMonitors())
           .where((monitor) => connected?.contains(monitor.name) ?? false)
           .toList();
@@ -171,9 +161,9 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       _session = session;
       handedOff = true;
       for (final output in frozen) {
-        final id = await _open('overlay', output: output.name);
+        final id = await openCaptureWindow('overlay', output: output.name);
         if (!_current(revision)) {
-          await _window('close', id);
+          await changeCaptureWindow('close', id);
           return;
         }
         _overlays[output.name] = id;
@@ -192,7 +182,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       await _configureInput(session);
       for (final id in _overlays.values.toList()) {
         if (!_current(revision)) return;
-        await _window('show', id);
+        await changeCaptureWindow('show', id);
       }
       session.addListener(_syncKeyboard);
     } catch (error) {
@@ -210,23 +200,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   }
 
   Future<bool> _lockCapture() async {
-    if (_captureLock != null) return true;
-    final runtime = Platform.environment['XDG_RUNTIME_DIR'];
-    if (runtime == null || !runtime.startsWith('/')) {
-      throw StateError('A Wayland runtime directory is required.');
-    }
-    final lock = await File('$runtime/top.remya.screen_capture.lock')
-        .open(mode: .append);
-    try {
-      await lock.lock();
-    } on FileSystemException catch (error) {
-      await lock.close();
-      // Linux fcntl reports a contended lock as EAGAIN or EACCES.
-      if (error.osError?.errorCode case 11 || 13) return false;
-      rethrow;
-    }
-    _captureLock = lock;
-    return true;
+    _captureLock ??= await tryCaptureLock();
+    return _captureLock != null;
   }
 
   Future<void> _releaseCaptureLock() async {
@@ -306,7 +281,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     try {
       for (final id in _overlays.values.toList()) {
         if (!_current(revision)) return;
-        await _window('hide', id);
+        await changeCaptureWindow('hide', id);
       }
       if (!_current(revision)) return;
       final capture = await rust.beginScroll(
@@ -336,7 +311,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       await _configureInput(session);
       for (final id in _overlays.values.toList()) {
         if (!_current(revision)) return;
-        await _window('show', id);
+        await changeCaptureWindow('show', id);
       }
       if (!_current(revision)) return;
       session.setBusy(false);
@@ -351,7 +326,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       await _configureInput(session);
       for (final id in _overlays.values.toList()) {
         if (!_current(revision)) return;
-        await _window('show', id);
+        await changeCaptureWindow('show', id);
       }
     }
   }
@@ -507,7 +482,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
             ? [panel.rect]
             : <Rect>[];
         try {
-          await _input(
+          await setCaptureInput(
             entry.value,
             rects,
             entry.key == target ? 'exclusive' : 'none',
@@ -531,8 +506,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     session?.removeListener(_syncKeyboard);
     if (mounted && ids.isNotEmpty) setState(() => ids.forEach(_widgets.remove));
     for (final id in ids) {
-      await _window('hide', id);
-      await _window('close', id);
+      await changeCaptureWindow('hide', id);
+      await changeCaptureWindow('close', id);
     }
     _releaseSession(session);
   }
@@ -618,7 +593,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     String name,
     CaptureReceipt receipt,
   ) async {
-    final id = await _open('result', output: output.name);
+    final id = await openCaptureWindow('result', output: output.name);
     _resultView = id;
     final size = output.bounds.size;
     final width = math.min(590.0, size.width - 16);
@@ -653,8 +628,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         },
       ),
     );
-    await _input(id, [box], 'onDemand');
-    await _window('show', id);
+    await setCaptureInput(id, [box], 'onDemand');
+    await changeCaptureWindow('show', id);
   }
 
   Future<void> _editResult(ui.Image image, String name) async {
@@ -662,7 +637,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     _resultOpeningEditor = true;
     final id = _resultView;
     try {
-      if (id != null) await _window('hide', id);
+      if (id != null) await changeCaptureWindow('hide', id);
       await _showEditor(
         image,
         '${name.substring(0, name.length - 4)}-edited.png',
@@ -680,7 +655,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   }
 
   Future<void> _showEditor(ui.Image image, String name) async {
-    final id = _editorView ??= await _open('editor');
+    final id = _editorView ??= await openCaptureWindow('editor');
     _editorPath = null;
     _errorVisible = false;
     _setView(
@@ -692,10 +667,10 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         onSave: (png, {required saveAs}) => _saveEdited(id, png, name, saveAs),
         onClose: () => unawaited(_quit()),
         closeRequests: _closeRequests,
-        onMoveWindow: () => unawaited(_window('beginMove', id)),
+        onMoveWindow: () => unawaited(changeCaptureWindow('beginMove', id)),
       ),
     );
-    await _window('show', id);
+    await changeCaptureWindow('show', id);
   }
 
   Future<String?> _saveEdited(
@@ -768,7 +743,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   final _editorContext = GlobalKey();
 
   Future<String> _picturesDirectory() async {
-    final path = await _native.invokeMethod<String>('picturesDirectory');
+    final path = await captureWindows.invokeMethod<String>('picturesDirectory');
     if (path != null && path.startsWith('/')) return path;
     final home = Platform.environment['HOME'];
     if (home == null || !home.startsWith('/')) {
@@ -788,7 +763,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     if (!mounted || _closing) return;
     _errorVisible = true;
     try {
-      final id = _editorView ??= await _open('editor');
+      final id = _editorView ??= await openCaptureWindow('editor');
       _setView(
         id,
         Scaffold(
@@ -824,7 +799,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           ),
         ),
       );
-      await _window('show', id);
+      await changeCaptureWindow('show', id);
     } catch (error) {
       debugPrint(message);
       await _quit();
@@ -835,39 +810,12 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     if (_closing) return;
     _closing = true;
     _revision++;
-    await _native.invokeMethod<void>('quit');
+    await captureWindows.invokeMethod<void>('quit');
   }
-
-  Future<int> _open(String role, {String? output}) async => (await _native
-      .invokeMethod<int>('open', {'role': role, 'output': ?output}))!;
-
-  Future<void> _window(String action, int id) async {
-    try {
-      await _native.invokeMethod<void>(action, {'id': id});
-    } on PlatformException catch (error) {
-      if (error.code != 'window-closed' || action == 'show') rethrow;
-    }
-  }
-
-  Future<void> _input(int id, List<Rect>? rects, String keyboard) =>
-      _native.invokeMethod<void>('input', {
-        'id': id,
-        'keyboard': keyboard,
-        'rects': rects
-            ?.map(
-              (rect) => {
-                'x': rect.left.floor(),
-                'y': rect.top.floor(),
-                'width': rect.right.ceil() - rect.left.floor(),
-                'height': rect.bottom.ceil() - rect.top.floor(),
-              },
-            )
-            .toList(),
-      });
 
   Future<void> _removeView(int id) async {
     if (mounted) setState(() => _widgets.remove(id));
-    await _window('close', id);
+    await changeCaptureWindow('close', id);
   }
 
   void _setView(int id, Widget child) {

@@ -191,7 +191,7 @@ class CaptureWindows {
   }
 
  private:
-  enum class Role { overlay, result, editor };
+  enum class Role { overlay, result, recording_setup, recording_hud, editor };
 
   struct Window {
     CaptureWindows* host;
@@ -238,10 +238,12 @@ class CaptureWindows {
       open(call, args);
       return;
     }
-    if (g_str_equal(method, "picturesDirectory")) {
-      const char* path = g_getenv("XDG_PICTURES_DIR");
+    const bool pictures = g_str_equal(method, "picturesDirectory");
+    if (pictures || g_str_equal(method, "videosDirectory")) {
+      const char* path = g_getenv(pictures ? "XDG_PICTURES_DIR" : "XDG_VIDEOS_DIR");
       if (path == nullptr || !g_path_is_absolute(path)) {
-        path = g_get_user_special_dir(G_USER_DIRECTORY_PICTURES);
+        path = g_get_user_special_dir(pictures ? G_USER_DIRECTORY_PICTURES
+                                               : G_USER_DIRECTORY_VIDEOS);
       }
       g_autoptr(FlValue) value =
           path == nullptr ? fl_value_new_null() : fl_value_new_string(path);
@@ -310,7 +312,9 @@ class CaptureWindows {
     const bool editor = g_str_equal(role_name, "editor");
     const bool overlay = g_str_equal(role_name, "overlay");
     const bool result = g_str_equal(role_name, "result");
-    if (!editor && !overlay && !result) {
+    const bool recording_setup = g_str_equal(role_name, "recordingSetup");
+    const bool recording_hud = g_str_equal(role_name, "recordingHud");
+    if (!editor && !overlay && !result && !recording_setup && !recording_hud) {
       error(call, "bad-arguments", "Unknown capture window role.");
       return;
     }
@@ -326,9 +330,11 @@ class CaptureWindows {
       }
       monitor = found->second;
     }
-    const auto role = editor    ? Role::editor
-                      : overlay ? Role::overlay
-                                : Role::result;
+    const auto role = editor            ? Role::editor
+                      : overlay         ? Role::overlay
+                      : recording_setup ? Role::recording_setup
+                      : recording_hud   ? Role::recording_hud
+                                        : Role::result;
     for (auto& entry : windows_) {
       auto& state = *entry.second;
       if (state.active || state.role != role) continue;
@@ -364,8 +370,11 @@ class CaptureWindows {
                        state.get());
     } else {
       gtk_layer_init_for_window(window);
-      gtk_layer_set_namespace(window, overlay ? APPLICATION_ID "/overlay"
-                                              : APPLICATION_ID "/result");
+      const char* layer_namespace = overlay ? APPLICATION_ID "/overlay"
+          : recording_setup ? APPLICATION_ID "/recording-setup"
+          : recording_hud ? APPLICATION_ID "/recording-hud"
+                          : APPLICATION_ID "/result";
+      gtk_layer_set_namespace(window, layer_namespace);
       gtk_layer_set_monitor(window, monitor);
       gtk_layer_set_layer(window, GTK_LAYER_SHELL_LAYER_OVERLAY);
       gtk_layer_set_exclusive_zone(window, -1);
