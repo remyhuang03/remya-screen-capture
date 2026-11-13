@@ -15,8 +15,10 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   flutter_rust_bridge: 2.13.0
-  remya_settings_client:
-    path: ../remya-settings/packages/remya_settings_client
+  remya_client:
+    path: ../remya-core/packages/remya_client
+  remya_ui:
+    path: ../remya-core/packages/remya_ui
 
 dev_dependencies:
   flutter_test:

@@ -17,8 +17,10 @@
 - Future feature backends use `flutter_rust_bridge` 2.13.0; add `flutter_rust_bridge.yaml` and use the matching generator when a concrete Rust API is introduced.
 - Keep generated bridge code separate from handwritten code and regenerate it instead of editing it manually.
 
-## Settings Integration and XDG
-- Remya Screen Capture integrates with Remya Settings when needed via the public `remya_settings_client` package.
+## Core Integration and XDG
+- Use the public `remya_client` and `remya_ui` packages from Remya Core.
+- Declare app preferences in `linux/packaging/remya-screen-capture.json` and read/write them only through `AppPreferences('remya-screen-capture')`; remyad owns persistence.
+- Keep color history as app-owned XDG state. Provide a desktop `settings` action for Core OpenApp routing.
 - Respect XDG base directory specifications (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_PICTURES_DIR`). Do not create unused cache/state directories.
 
 ## Toolchains & Dependencies

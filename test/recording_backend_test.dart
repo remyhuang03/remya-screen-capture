@@ -7,7 +7,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:remya_screen_capture/features/recording/recording_backend.dart';
 import 'package:remya_screen_capture/features/screenshot/capture_geometry.dart';
 
+import 'fake_app_preferences.dart';
+
 void main() {
+  test(
+    'recording defaults and writes use the registered Core preference',
+    () async {
+      final preferences = FakeAppPreferences();
+      final defaults = await RecordingOptions.read(preferences: preferences);
+      expect(defaults.systemAudio, isTrue);
+      expect(defaults.microphone, isFalse);
+      expect(defaults.cursor, isTrue);
+      await defaults
+          .copyWith(cursor: false, microphone: true)
+          .save(preferences: preferences);
+      final saved = await RecordingOptions.read(preferences: preferences);
+      expect(saved.cursor, isFalse);
+      expect(saved.microphone, isTrue);
+      expect(preferences.writes, ['recording']);
+      preferences.values['recording'] = {'cursor': 'invalid'};
+      await expectLater(
+        RecordingOptions.read(preferences: preferences),
+        throwsFormatException,
+      );
+      preferences.unavailable = true;
+      await expectLater(
+        RecordingOptions.read(preferences: preferences),
+        throwsStateError,
+      );
+      await expectLater(saved.save(preferences: preferences), throwsStateError);
+      expect(saved.cursor, isFalse);
+    },
+  );
+
   final output = CaptureMonitor({
     'id': 2,
     'name': 'DP-TEST',

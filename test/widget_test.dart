@@ -240,6 +240,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('settings routing takes priority and validates registered pages', () {
+    expect(
+      parseEntrypoint(['--record', '--settings']),
+      CaptureEntrypoint.settings,
+    );
+    expect(settingsPage(['--settings']), isNull);
+    expect(settingsPage(['--settings', 'recording']), 'recording');
+    expect(settingsPage(['--settings', 'color-picker']), 'color-picker');
+    expect(
+      () => settingsPage(['--settings', '../invalid']),
+      throwsArgumentError,
+    );
+  });
+
   test(
     'parseEntrypoint recognizes screenshot, record and color picker flags',
     () {

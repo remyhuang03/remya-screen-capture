@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
+import 'package:remya_client/remya_client.dart';
+
 import '../screenshot/capture_geometry.dart';
 
 class RecordingOptions {
@@ -27,55 +29,45 @@ class RecordingOptions {
     cursor: cursor ?? this.cursor,
   );
 
-  static Future<RecordingOptions> read() async {
-    final path = _preferencesPath;
-    if (path == null) return const RecordingOptions();
-    try {
-      final json = jsonDecode(await File(path).readAsString());
-      if (json is Map<String, dynamic>) {
-        return RecordingOptions(
-          systemAudio: json['systemAudio'] != false,
-          microphone: json['microphone'] == true,
-          cursor: json['cursor'] != false,
-        );
-      }
-    } on FileSystemException {
-      return const RecordingOptions();
-    } on FormatException {
-      return const RecordingOptions();
+  static RecordingOptions fromValue(Object? value) {
+    if (value case {
+      'systemAudio': final bool systemAudio,
+      'microphone': final bool microphone,
+      'cursor': final bool cursor,
+    }) {
+      return RecordingOptions(
+        systemAudio: systemAudio,
+        microphone: microphone,
+        cursor: cursor,
+      );
     }
-    return const RecordingOptions();
+    throw const FormatException(
+      'Invalid recording preferences from Remya Core.',
+    );
   }
 
-  Future<void> save() async {
-    final path = _preferencesPath;
-    if (path == null) return;
-    final parent = await File(path).parent.create(recursive: true);
-    final staging = await parent.createTemp('.recording-options-');
+  static Future<RecordingOptions> read({AppPreferences? preferences}) async {
+    final store = preferences ?? AppPreferences('remya-screen-capture');
     try {
-      final file = await File('${staging.path}/options.json').writeAsString(
-        jsonEncode({
+      return fromValue((await store.get('recording'))['value']);
+    } finally {
+      if (preferences == null) await store.close();
+    }
+  }
+
+  Future<void> save({AppPreferences? preferences}) async {
+    final store = preferences ?? AppPreferences('remya-screen-capture');
+    try {
+      fromValue(
+        (await store.set('recording', {
           'systemAudio': systemAudio,
           'microphone': microphone,
           'cursor': cursor,
-        }),
-        flush: true,
+        }))['value'],
       );
-      await file.rename(path);
     } finally {
-      await staging.delete(recursive: true);
+      if (preferences == null) await store.close();
     }
-  }
-
-  static String? get _preferencesPath {
-    final config = Platform.environment['XDG_CONFIG_HOME'];
-    final home = Platform.environment['HOME'];
-    final root = config != null && config.startsWith('/')
-        ? config
-        : home != null && home.startsWith('/')
-        ? '$home/.config'
-        : null;
-    return root == null ? null : '$root/remya/screen-capture/recording.json';
   }
 }
 

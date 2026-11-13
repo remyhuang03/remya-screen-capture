@@ -39,6 +39,11 @@ def require_inter_font():
 def install(root, environment):
     require_inter_font()
     data = data_home(environment).resolve()
+    roots = [data, *(Path(value) for value in environment.get(
+        "XDG_DATA_DIRS", "/usr/local/share:/usr/share"
+    ).split(":") if value.startswith("/"))]
+    if not any((item / "dbus-1/services/top.remya.Core1.service").is_file() for item in roots):
+        raise RuntimeError("Install Remya Core first (top.remya.Core1.service is required)")
     source = root / "build/linux/x64/release/bundle"
     if not (source / APP_ID).is_file():
         raise RuntimeError("Run fvm flutter build linux --release first")
@@ -77,6 +82,10 @@ def install(root, environment):
     entry = (root / f"linux/packaging/{PACKAGE}.desktop").read_text()
     entry = entry.replace(f"Exec={APP_ID}", f"Exec=/usr/bin/env {desktop_quote(destination / APP_ID)}")
     (applications / f"{PACKAGE}.desktop").write_text(entry)
+    registrations = data / "remya/apps"
+    registrations.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(root / "linux/packaging/remya-screen-capture.json",
+                    registrations / "remya-screen-capture.json")
     icons = data / "icons/hicolor/scalable/apps"
     icons.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / "assets/icons/app_icon.svg", icons / f"{PACKAGE}.svg")

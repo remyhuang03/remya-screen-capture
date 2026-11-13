@@ -151,7 +151,11 @@ class _RecordingHostState extends State<RecordingHost>
         if (_phase == .closing) return;
         setState(() => _editor = null);
       }
-      _options = await RecordingOptions.read();
+      try {
+        _options = await RecordingOptions.read();
+      } catch (error) {
+        _message = 'Could not read recording settings. ${_describe(error)}';
+      }
       final outputs = await captureWindows.invokeListMethod<String>('outputs');
       final monitors = (await readMonitors())
           .where((monitor) => outputs?.contains(monitor.name) ?? false)
@@ -307,7 +311,14 @@ class _RecordingHostState extends State<RecordingHost>
     });
     RecordingResult? recovered;
     try {
-      await options.save();
+      try {
+        await options.save();
+      } catch (error) {
+        setState(() {
+          _message = 'Could not save recording settings. ${_describe(error)}';
+        });
+        debugPrint(_message);
+      }
       if (cancel.isCompleted) return;
       _shader = await HyprlandCaptureRendering.suspend(
         hardwareCursor: !options.cursor,
