@@ -76,7 +76,7 @@ hl.bind("SUPER + R", hl.dsp.exec_cmd("remya_screen_capture --record"))
 - Hyprland Wayland session with `grim` 1.5.0 or newer and support for foreign-toplevel image capture. The target is Hyprland 0.57.2.
 - On Arch, install the capture and native build dependencies with `sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols`.
 - For recording and video editing on Arch, install `gpu-screen-recorder ffmpeg mpv libepoxy` and use PipeWire or PulseAudio for audio capture. The recording backend needs `gsr-cli` and the first-frame timestamp option from GPU Screen Recorder 6.1.7 or newer. The normal distro package supplies the KMS helper. Hardware encoding is optional, with H.264 CPU encoding as a fallback on systems where GPU Screen Recorder can capture the display.
-- Turning off **Show cursor** disables cursor capture in GPU Screen Recorder. A software cursor that Hyprland has already drawn into the desktop image can still appear in the video.
+- Hyprland may draw a software cursor into the screen image (for example whenever an NVIDIA GPU is present), which captures cannot leave out. Screenshots, scrolling captures, and recordings with **Show cursor** off therefore switch Hyprland to hardware cursors while capturing and restore `cursor:no_hardware_cursors` afterwards. A display that cannot use a hardware cursor can still show it.
 - Inter system font and fontconfig for installation (Arch: `sudo pacman -S inter-font fontconfig`)
 - A sibling `../remya-settings` checkout providing `packages/remya_settings_client`
 

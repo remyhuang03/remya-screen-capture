@@ -1,45 +1,57 @@
 import 'dart:io';
 
 class HyprlandCaptureRendering {
-  HyprlandCaptureRendering._(this._hex, this._restoreCursor);
+  HyprlandCaptureRendering._(this._hex, this._noHardwareCursors);
 
   String _hex;
-  bool _restoreCursor;
 
+  /// The `cursor.no_hardware_cursors` value replaced while capturing.
+  int? _noHardwareCursors;
+
+  /// Turns off the screen shader and, with [hardwareCursor], switches the
+  /// cursor to the hardware plane. A software cursor is drawn into the
+  /// screen image, so screencopy and KMS capture cannot leave it out.
   static Future<HyprlandCaptureRendering> suspend({
-    bool hideCursor = false,
+    bool hardwareCursor = false,
   }) async {
     final result = await _hyprctl([
       'repl',
       '''
 local shader = hl.get_config('decoration.screen_shader')
 if type(shader) ~= 'string' then return 'unknown shader' end
-local hide = ${hideCursor ? 'true' : 'false'} and not hl.get_config('cursor.invisible')
+local nohw = hl.get_config('cursor.no_hardware_cursors')
+local force = ${hardwareCursor ? 'true' : 'false'} and type(nohw) == 'number' and nohw ~= 0
 if shader ~= '' then
   hl.config({decoration = {screen_shader = '[[EMPTY]]'}})
 end
-if hide then hl.config({cursor = {invisible = true}}) end
-return 'shader:' .. (shader:gsub('.', function(c) return string.format('%02x', c:byte()) end)) .. ':' .. (hide and '1' or '0')
+if force then
+  hl.config({cursor = {no_hardware_cursors = 0}})
+  -- The cursor backend is only re-evaluated when the pointer moves.
+  local p = hl.get_cursor_pos()
+  hl.dispatch(hl.dsp.cursor.move({x = p.x, y = p.y}))
+end
+return 'shader:' .. (shader:gsub('.', function(c) return string.format('%02x', c:byte()) end)) .. ':' .. (force and tostring(math.floor(nohw)) or '-')
 ''',
     ]);
-    final response = RegExp(r'^shader:((?:[a-f0-9]{2})*):([01])$')
+    final response = RegExp(r'^shader:((?:[a-f0-9]{2})*):(-|\d+)$')
         .firstMatch(result.trim());
     if (response == null) {
       throw StateError('Could not read the current screen shader.');
     }
     final suspended = HyprlandCaptureRendering._(
       response[1]!,
-      response[2] == '1',
+      int.tryParse(response[2]!),
     );
-    if (suspended._restoreCursor) {
-      // Hyprland applies cursor visibility on a 500 ms timer.
-      await Future<void>.delayed(const Duration(milliseconds: 550));
+    if (suspended._noHardwareCursors != null) {
+      // Let the next frame render without the software cursor.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     return suspended;
   }
 
   Future<void> restore() async {
-    if (_hex.isEmpty && !_restoreCursor) return;
+    final noHardwareCursors = _noHardwareCursors;
+    if (_hex.isEmpty && noHardwareCursors == null) return;
     await _hyprctl([
       'eval',
       '''
@@ -47,13 +59,15 @@ if '$_hex' ~= '' and hl.get_config('decoration.screen_shader') == '' then
   local shader = ('$_hex'):gsub('..', function(pair) return string.char(tonumber(pair, 16)) end)
   hl.config({decoration = {screen_shader = shader}})
 end
-if ${_restoreCursor ? 'true' : 'false'} then
-  hl.config({cursor = {invisible = false}})
+if ${noHardwareCursors ?? 'nil'} and hl.get_config('cursor.no_hardware_cursors') == 0 then
+  hl.config({cursor = {no_hardware_cursors = ${noHardwareCursors ?? 0}}})
+  local p = hl.get_cursor_pos()
+  hl.dispatch(hl.dsp.cursor.move({x = p.x, y = p.y}))
 end
 ''',
     ]);
     _hex = '';
-    _restoreCursor = false;
+    _noHardwareCursors = null;
   }
 }
 
