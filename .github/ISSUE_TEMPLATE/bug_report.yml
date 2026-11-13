@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with Remy'a Screen Capture.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search [existing issues](https://github.com/remyhuang03/remya-screen-capture/issues?q=is%3Aissue) before filing.
+        This report is public. Remove private information from logs and attachments.
+        Report suspected vulnerabilities [privately](https://github.com/remyhuang03/remya-screen-capture/security/advisories/new).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Screenshot or scrolling capture
+        - Screenshot editor
+        - Screen recording
+        - Video editor or export
+        - Color picker
+        - Installation or startup
+        - Other or unsure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version and installation method
+      placeholder: "Example: v0.1.0 from AUR, or a source commit"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Linux distribution and Hyprland version
+      description: Include the relevant version from `hyprctl version` if available.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the command, shortcut, or capture mode if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant setup and logs
+      description: |
+        For display issues, include monitor count, scale, and rotation. For recording or export,
+        include the GPU and driver, affected audio source, or GPU Screen Recorder and FFmpeg
+        versions as relevant. Share only sanitized logs or sample media.
