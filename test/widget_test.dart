@@ -245,6 +245,11 @@ void main() {
     () {
       expect(parseEntrypoint(const []), CaptureEntrypoint.screenshot);
       expect(parseEntrypoint(const ['--record']), CaptureEntrypoint.recording);
+      expect(parseEntrypoint(const ['--mode']), CaptureEntrypoint.screenshot);
+      expect(
+        parseEntrypoint(const ['--mode', 'color']),
+        CaptureEntrypoint.colorPicker,
+      );
       expect(
         parseEntrypoint(const ['--color-picker']),
         CaptureEntrypoint.colorPicker,

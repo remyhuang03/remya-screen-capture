@@ -8,6 +8,8 @@ import '../capture_controls/capture_buttons.dart';
 import '../capture_controls/capture_icon.dart';
 import '../capture_controls/capture_labels.dart';
 import '../capture_controls/capture_selection.dart';
+import '../color_picker/color_data.dart';
+import '../color_picker/color_loupe.dart';
 import 'capture_geometry.dart';
 import 'capture_session.dart';
 
@@ -18,6 +20,7 @@ class CaptureOverlay extends StatefulWidget {
     required this.output,
     required this.onCapture,
     required this.onPickColor,
+    required this.onColorHistory,
     required this.onScroll,
     required this.onBack,
     required this.onDone,
@@ -26,7 +29,9 @@ class CaptureOverlay extends StatefulWidget {
   final CaptureSession session;
   final FrozenOutput output;
   final ValueChanged<CaptureRequest> onCapture;
-  final VoidCallback onPickColor;
+  final void Function(PickedColor sample, {required bool keepPicking})
+  onPickColor;
+  final VoidCallback onColorHistory;
   final VoidCallback onScroll;
   final VoidCallback onBack;
   final VoidCallback onDone;
@@ -56,14 +61,54 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
       widget.onBack();
       return .handled;
     }
-    if (session.scroll == null &&
-        session.draft == null &&
-        const SingleActivator(
-          .keyC,
-          includeRepeats: false,
-        ).accepts(event, HardwareKeyboard.instance)) {
-      widget.onPickColor();
+    final keyboard = HardwareKeyboard.instance;
+    if (const SingleActivator(
+      .keyC,
+      includeRepeats: false,
+    ).accepts(event, keyboard)) {
+      _focus.requestFocus();
+      session.toggleColor(viewport);
       return .handled;
+    }
+    if (const SingleActivator(
+          .tab,
+          includeRepeats: false,
+        ).accepts(event, keyboard) &&
+        _focus.hasPrimaryFocus &&
+        session.scroll == null) {
+      session.cycleMode(viewport);
+      return .handled;
+    }
+    final move = switch (key) {
+      LogicalKeyboardKey.arrowLeft => const Offset(-1, 0),
+      LogicalKeyboardKey.arrowUp => const Offset(0, -1),
+      LogicalKeyboardKey.arrowRight => const Offset(1, 0),
+      LogicalKeyboardKey.arrowDown => const Offset(0, 1),
+      _ => null,
+    };
+    if (session.mode == .color && _focus.hasPrimaryFocus) {
+      if (move != null &&
+          !keyboard.isControlPressed &&
+          !keyboard.isAltPressed &&
+          !keyboard.isMetaPressed) {
+        session.nudgeColor(move * (keyboard.isShiftPressed ? 10 : 1), viewport);
+        return .handled;
+      }
+      for (final (shortcut, action) in [
+        (LogicalKeyboardKey.enter, () => _pick()),
+        (LogicalKeyboardKey.space, () => _pick()),
+        (LogicalKeyboardKey.keyF, session.cycleColorFormat),
+        (LogicalKeyboardKey.keyH, widget.onColorHistory),
+      ]) {
+        if (SingleActivator(
+          shortcut,
+          includeRepeats: false,
+        ).accepts(event, keyboard)) {
+          action();
+          return .handled;
+        }
+      }
+      return .ignored;
     }
     if (key == LogicalKeyboardKey.enter &&
         (_focus.hasPrimaryFocus || session.scroll != null)) {
@@ -74,22 +119,7 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
       }
       return .handled;
     }
-    if (key == LogicalKeyboardKey.tab &&
-        _focus.hasPrimaryFocus &&
-        !HardwareKeyboard.instance.isShiftPressed &&
-        session.scroll == null &&
-        session.selection == null) {
-      session.changeMode(session.mode == .region ? .window : .region, viewport);
-      return .handled;
-    }
     final selection = session.selection;
-    final move = switch (key) {
-      LogicalKeyboardKey.arrowLeft => const Offset(-1, 0),
-      LogicalKeyboardKey.arrowUp => const Offset(0, -1),
-      LogicalKeyboardKey.arrowRight => const Offset(1, 0),
-      LogicalKeyboardKey.arrowDown => const Offset(0, 1),
-      _ => null,
-    };
     if (selection != null &&
         session.scroll == null &&
         move != null &&
@@ -107,6 +137,12 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
     return .ignored;
   }
 
+  void _pick({bool keepPicking = false}) {
+    if (!session.busy) {
+      widget.onPickColor(session.colorSample, keepPicking: keepPicking);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: session,
@@ -115,6 +151,7 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
         final size = constraints.biggest;
         if (size.isEmpty) return const SizedBox.shrink();
         final active = output == session.active;
+        final picking = session.mode == .color;
         final scroll = session.scroll;
         final pixelSelection = active ? session.selection : null;
         final selection = pixelSelection == null
@@ -160,27 +197,60 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
               if (scroll == null)
                 RawImage(image: output.image, fit: .fill, filterQuality: .none),
               IgnorePointer(
-                child: CustomPaint(
-                  painter: _OverlayPaint(
-                    hole: hole,
-                    pointer: pointer,
-                    outline: colors.primary,
-                    window: windowRect != null,
-                    scrolling: scroll != null,
+                child: AnimatedOpacity(
+                  opacity: picking ? 0 : 1,
+                  duration: const Duration(milliseconds: 150),
+                  child: CustomPaint(
+                    painter: _OverlayPaint(
+                      hole: hole,
+                      pointer: pointer,
+                      outline: colors.primary,
+                      window: windowRect != null,
+                      scrolling: scroll != null,
+                    ),
                   ),
                 ),
               ),
               if (scroll == null)
                 Positioned.fill(
                   child: MouseRegion(
-                    cursor: session.mode == .region && selection == null
+                    cursor: picking
+                        ? SystemMouseCursors.none
+                        : session.mode == .region && selection == null
                         ? SystemMouseCursors.precise
                         : SystemMouseCursors.basic,
                     onHover: (event) =>
                         session.hover(output, event.localPosition, size),
                     child: Listener(
                       behavior: .opaque,
+                      onPointerSignal: picking
+                          ? (event) {
+                              if (event is PointerScrollEvent &&
+                                  event.scrollDelta.dy != 0 &&
+                                  !session.busy) {
+                                session.hover(
+                                  output,
+                                  event.localPosition,
+                                  size,
+                                );
+                                session.zoomColor(event.scrollDelta.dy < 0);
+                              }
+                            }
+                          : null,
                       onPointerDown: (event) {
+                        if (picking) {
+                          if (event.buttons != kPrimaryMouseButton ||
+                              session.busy) {
+                            return;
+                          }
+                          _focus.requestFocus();
+                          session.hover(output, event.localPosition, size);
+                          _pick(
+                            keepPicking:
+                                HardwareKeyboard.instance.isShiftPressed,
+                          );
+                          return;
+                        }
                         if (_pointerId != null ||
                             selection != null ||
                             (event.buttons != kPrimaryMouseButton &&
@@ -221,6 +291,21 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                 ),
               if (pointer != null && !session.busy)
                 _Loupe(output: output, pointer: pointer, viewport: size),
+              if (picking && active)
+                if ((session.colorPixel, session.pointer) case (
+                  final pixel?,
+                  final pointer?,
+                ))
+                  ColorLoupe(
+                    output: output,
+                    pointer: pointer,
+                    pixel: pixel,
+                    position: session.colorPosition,
+                    viewport: size,
+                    zoom: session.zoom,
+                    format: session.colorFormat,
+                    uppercase: session.uppercaseHex,
+                  ),
               if (window != null &&
                   windowRect != null &&
                   !windowRect.isEmpty &&
@@ -244,7 +329,10 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                     delegate: _ModeToolbarLayout(_toolbarPosition),
                     child: _ModeToolbar(
                       mode: session.mode,
-                      onChanged: (value) => session.changeMode(value, size),
+                      onChanged: (value) {
+                        _focus.requestFocus();
+                        session.changeMode(value, size);
+                      },
                       onDrag: (delta, toolbar) {
                         final layout = _ModeToolbarLayout(_toolbarPosition);
                         setState(
@@ -376,15 +464,28 @@ class _ModeToolbar extends StatelessWidget {
                 CaptureSegment(
                   CaptureMode.window,
                   'Window',
-                  icon: CaptureIcon(.window),
+                  icon: CaptureIcon.segmentWindow(),
+                ),
+                CaptureSegment(
+                  CaptureMode.color,
+                  'Color',
+                  icon: CaptureIcon.segmentColor(),
                 ),
               ],
               value: mode,
               onChanged: onChanged,
             ),
             const CaptureDivider(),
-            _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
-            _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
+            if (mode == .color) ...const [
+              _Hint('LMB', 'Pick'),
+              _Hint('Shift+LMB', 'Pick & keep'),
+              _Hint('Scroll', 'Zoom'),
+              _Hint('F', 'Format'),
+            ] else ...[
+              _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
+              _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
+            ],
+            _Hint('C', mode == .color ? 'Back to capture' : 'Pick color'),
             const _Hint('Tab', 'Switch'),
             const _Hint('Esc', 'Cancel'),
           ],
@@ -529,6 +630,7 @@ class _SelectionTools extends StatelessWidget {
                       _Hint('Esc', 'Cancel'),
                       _Hint('Shift', 'Keep ratio'),
                       _Hint('←↑→↓', 'Nudge'),
+                      _Hint('C', 'Pick color'),
                     ],
                   ),
                 ),
@@ -618,16 +720,7 @@ class _Loupe extends StatelessWidget {
     final y = pointer.dy + gap + extent + 32 <= viewport.height
         ? pointer.dy + gap
         : math.max(0.0, pointer.dy - gap - extent - 32);
-    final pixel = Offset(
-      (pointer.dx * output.size.width / viewport.width).floorToDouble().clamp(
-        0.0,
-        output.size.width - 1,
-      ),
-      (pointer.dy * output.size.height / viewport.height).floorToDouble().clamp(
-        0.0,
-        output.size.height - 1,
-      ),
-    );
+    final pixel = output.pixelAt(pointer, viewport);
     final colors = Theme.of(context).colorScheme;
     final color = output.colorAt(pixel).toARGB32() & 0xffffff;
     final hex = color.toRadixString(16).padLeft(6, '0').toUpperCase();

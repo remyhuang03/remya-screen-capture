@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../capture_windows.dart';
+import '../../hyprland_capture_rendering.dart';
 import '../capture_controls/capture_buttons.dart';
 import '../screenshot/capture_geometry.dart';
 import '../video_editor/video_editor.dart';
@@ -51,7 +52,7 @@ class _RecordingHostState extends State<RecordingHost>
   bool _exitRequested = false;
   RandomAccessFile? _captureLock;
   RecordingShortcut? _shortcut;
-  RecordingShader? _shader;
+  HyprlandCaptureRendering? _shader;
   Completer<void>? _cancelStart;
   RecordingOptions _options = const RecordingOptions();
   RecordingRun? _run;
@@ -308,7 +309,7 @@ class _RecordingHostState extends State<RecordingHost>
     try {
       await options.save();
       if (cancel.isCompleted) return;
-      _shader = await RecordingShader.suspend();
+      _shader = await HyprlandCaptureRendering.suspend();
       for (var value = 3; value > 0 && !cancel.isCompleted; value--) {
         setState(() => _countdown = value);
         await Future.any([
