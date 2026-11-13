@@ -556,12 +556,34 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       return;
     }
     session.setBusy(true);
+    final _ScrollRun run;
     try {
-      for (final id in _overlays.values.toList()) {
-        if (!_current(revision)) return;
-        await changeCaptureWindow('hide', id);
-      }
-      if (!_current(revision)) return;
+      // Live frames must match what the user sees, without the screen shader.
+      run = _ScrollRun(await HyprlandCaptureRendering.suspend());
+    } catch (error) {
+      if (_current(revision)) session.setBusy(false, error: _message(error));
+      return;
+    }
+    if (!_current(revision)) {
+      await run.rendering.restore();
+      return;
+    }
+    _scrollRun = run;
+    session.setScroll((
+      panel: panel,
+      frames: 0,
+      width: rect.width.toInt(),
+      height: rect.height.toInt(),
+      png: null,
+      message: 'Starting…',
+      ready: false,
+    ));
+    try {
+      await _configureInput(session);
+      // Let the overlay replace the frozen screenshot before the first frame.
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (!_current(revision) || _scrollRun != run) return;
       final capture = await rust.beginScroll(
         output: output.name,
         x: rect.left.toInt(),
@@ -569,138 +591,109 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         width: rect.width.toInt(),
         height: rect.height.toInt(),
       );
-      if (!_current(revision)) {
+      if (!_current(revision) || _scrollRun != run) {
         capture.dispose();
         return;
       }
-      final run = _ScrollRun(capture);
-      _scrollRun = run;
-      final seed = await capture.sample();
-      if (!_current(revision) || _scrollRun != run) return;
-      session.setScroll((
-        panel: panel,
-        frames: seed.frames,
-        width: seed.width,
-        height: seed.height,
-        png: seed.preview,
-        message: 'Scroll down slowly inside the selection.',
-        ready: false,
-      ));
-      await _configureInput(session);
-      for (final id in _overlays.values.toList()) {
-        if (!_current(revision)) return;
-        await changeCaptureWindow('show', id);
-      }
-      if (!_current(revision)) return;
+      run.capture = capture;
+      _showScroll(session, await capture.seed(), _scrollingMessage);
       session.setBusy(false);
-      // Let the newly mapped transparent layers present before taking another frame.
-      await WidgetsBinding.instance.endOfFrame;
-      unawaited(_sampleScroll(run, session));
+      run.loop = _runScroll(run, session);
     } catch (error) {
-      if (!_current(revision)) return;
+      if (!_current(revision) || _scrollRun != run) return;
       _stopScroll();
       session.setScroll(null);
       session.setBusy(false, error: _message(error));
       await _configureInput(session);
-      for (final id in _overlays.values.toList()) {
-        if (!_current(revision)) return;
-        await changeCaptureWindow('show', id);
+    }
+  }
+
+  static const _scrollingMessage =
+      'Scrolling automatically. Select Done to stop early.';
+
+  Future<void> _runScroll(_ScrollRun run, CaptureSession session) async {
+    while (_scrollRun == run && !run.finishing) {
+      final rust.ScrollUpdate update;
+      try {
+        update = await run.capture!.step();
+      } catch (error) {
+        if (_scrollRun == run && !run.finishing) {
+          _showScroll(
+            session,
+            null,
+            'Scrolling stopped. ${_message(error)} Select Done to keep the captured part.',
+            stopped: true,
+          );
+        }
+        return;
+      }
+      if (_scrollRun != run || run.finishing) return;
+      switch (update.status) {
+        case .appended:
+          _showScroll(session, update, _scrollingMessage);
+        case .end || .full:
+          _showScroll(
+            session,
+            update,
+            update.status == .end
+                ? 'Reached the end of the content.'
+                : 'Reached the maximum image size.',
+            stopped: true,
+          );
+          unawaited(_finishScrolling());
+          return;
+        case .noMatch:
+          _showScroll(
+            session,
+            update,
+            'Could not line up the scrolled content. Select Done to keep the captured part.',
+            stopped: true,
+          );
+          return;
       }
     }
   }
 
-  Future<void> _sampleScroll(_ScrollRun run, CaptureSession session) async {
-    const interval = Duration(milliseconds: 167);
-    final clock = Stopwatch()..start();
-    var latestChange = Duration.zero;
-    var nextSample = interval;
-    while (_scrollRun == run && !run.finishing) {
-      await Future<void>.delayed(nextSample - clock.elapsed);
-      if (_scrollRun != run || run.finishing) return;
-      nextSample = clock.elapsed + interval;
-      try {
-        final sample = await run.capture.sample();
-        final previous = session.scroll;
-        if (_scrollRun != run || run.finishing || previous == null) return;
-        if (sample.height > previous.height) latestChange = clock.elapsed;
-        final stalled =
-            clock.elapsed - latestChange >= const Duration(seconds: 2);
-        final full = sample.status == .full;
-        final ready = full || stalled;
-        final message = switch (sample.status) {
-          rust.ScrollStatus.full =>
-            'Maximum image size reached. Finish to keep this capture.',
-          rust.ScrollStatus.noMatch =>
-            stalled
-                ? 'No overlap found. Scroll back slowly or finish with the captured frames.'
-                : 'Scroll back slowly to restore overlap.',
-          _ =>
-            stalled
-                ? 'No new content. Finish or keep scrolling.'
-                : 'Scroll down slowly inside the selection.',
-        };
-        if (sample.frames != previous.frames ||
-            ready != previous.ready ||
-            message != previous.message) {
-          session.setScroll((
-            panel: previous.panel,
-            frames: sample.frames,
-            width: sample.width,
-            height: sample.height,
-            png: sample.preview ?? previous.png,
-            message: message,
-            ready: ready,
-          ));
-        }
-        if (full) return;
-      } catch (error) {
-        final previous = session.scroll;
-        if (_scrollRun != run || run.finishing || previous == null) return;
-        session.setScroll((
-          panel: previous.panel,
-          frames: previous.frames,
-          width: previous.width,
-          height: previous.height,
-          png: previous.png,
-          message: 'Could not sample the screen. Finish or go back to retry.',
-          ready: true,
-        ));
-        return;
-      }
-    }
+  void _showScroll(
+    CaptureSession session,
+    rust.ScrollUpdate? update,
+    String message, {
+    bool stopped = false,
+  }) {
+    final previous = session.scroll;
+    if (previous == null) return;
+    session.setScroll((
+      panel: previous.panel,
+      frames: update?.frames ?? previous.frames,
+      width: update?.width ?? previous.width,
+      height: update?.height ?? previous.height,
+      png: update?.preview ?? previous.png,
+      message: message,
+      ready: stopped,
+    ));
   }
 
   Future<void> _finishScrolling() async {
     final run = _scrollRun;
     final session = _session;
-    if (run == null ||
-        session == null ||
-        run.finishing ||
-        session.busy ||
-        (session.scroll?.frames ?? 0) == 0) {
+    final capture = run?.capture;
+    if (run == null || capture == null || session == null || run.finishing) {
       return;
     }
     final revision = _revision;
     run.finishing = true;
     session.setBusy(true);
     try {
-      final png = await run.capture.finish();
+      // Stop after the scroll step in flight, keeping what it stitched.
+      await run.loop;
+      final png = await capture.finish();
       if (_current(revision)) await _deliver(png, session.request);
     } catch (error) {
       if (!_current(revision)) return;
-      if (_session == session) {
+      if (_session == session && session.scroll != null) {
         run.finishing = false;
         session.setBusy(false);
-        final previous = session.scroll!;
-        session.setScroll((
-          panel: previous.panel,
-          frames: previous.frames,
-          width: previous.width,
-          height: previous.height,
-          png: previous.png,
-          message: _message(error),
-          ready: true,
-        ));
+        _showScroll(session, null, _message(error), stopped: true);
       } else {
         await _showError(_message(error));
       }
@@ -728,7 +721,10 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   void _stopScroll() {
     final run = _scrollRun;
     _scrollRun = null;
-    run?.capture.dispose();
+    if (run == null) return;
+    run.finishing = true;
+    run.capture?.dispose();
+    unawaited(run.rendering.restore().catchError((Object _) {}));
   }
 
   void _syncKeyboard() {
@@ -1115,9 +1111,11 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
 }
 
 class _ScrollRun {
-  _ScrollRun(this.capture);
+  _ScrollRun(this.rendering);
 
-  final rust.ScrollCapture capture;
+  final HyprlandCaptureRendering rendering;
+  rust.ScrollCapture? capture;
+  Future<void> loop = Future.value();
   bool finishing = false;
 }
 

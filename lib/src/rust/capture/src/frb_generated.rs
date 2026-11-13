@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -940197843;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1437182103;
 
 // Section: executor
 
@@ -99,7 +99,7 @@ fn wire__crate__api__ScrollCapture_finish_impl(
         },
     )
 }
-fn wire__crate__api__ScrollCapture_sample_impl(
+fn wire__crate__api__ScrollCapture_seed_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -107,7 +107,7 @@ fn wire__crate__api__ScrollCapture_sample_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "ScrollCapture_sample",
+            debug_name: "ScrollCapture_seed",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -142,7 +142,58 @@ fn wire__crate__api__ScrollCapture_sample_impl(
                             }
                         }
                         let api_that_guard = api_that_guard.unwrap();
-                        let output_ok = crate::api::ScrollCapture::sample(&*api_that_guard)?;
+                        let output_ok = crate::api::ScrollCapture::seed(&*api_that_guard)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__ScrollCapture_step_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ScrollCapture_step",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ScrollCapture>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = crate::api::ScrollCapture::step(&*api_that_guard)?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -446,26 +497,15 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Option<Vec<u8>> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<Vec<u8>>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
 impl SseDecode for crate::api::ScrollStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::ScrollStatus::Appended,
-            1 => crate::api::ScrollStatus::Unchanged,
-            2 => crate::api::ScrollStatus::NoMatch,
-            3 => crate::api::ScrollStatus::Full,
+            1 => crate::api::ScrollStatus::End,
+            2 => crate::api::ScrollStatus::Full,
+            3 => crate::api::ScrollStatus::NoMatch,
             _ => unreachable!("Invalid variant for ScrollStatus: {}", inner),
         };
     }
@@ -477,7 +517,7 @@ impl SseDecode for crate::api::ScrollUpdate {
         let mut var_frames = <u32>::sse_decode(deserializer);
         let mut var_width = <u32>::sse_decode(deserializer);
         let mut var_height = <u32>::sse_decode(deserializer);
-        let mut var_preview = <Option<Vec<u8>>>::sse_decode(deserializer);
+        let mut var_preview = <Vec<u8>>::sse_decode(deserializer);
         let mut var_status = <crate::api::ScrollStatus>::sse_decode(deserializer);
         return crate::api::ScrollUpdate {
             frames: var_frames,
@@ -525,13 +565,14 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__ScrollCapture_finish_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__ScrollCapture_sample_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__begin_scroll_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__capture_output_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__capture_window_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__copy_png_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__crop_png_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__save_png_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__ScrollCapture_seed_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__ScrollCapture_step_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__begin_scroll_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__capture_output_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__capture_window_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__copy_png_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__crop_png_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__save_png_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -570,9 +611,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::ScrollStatus {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Appended => 0.into_dart(),
-            Self::Unchanged => 1.into_dart(),
-            Self::NoMatch => 2.into_dart(),
-            Self::Full => 3.into_dart(),
+            Self::End => 1.into_dart(),
+            Self::Full => 2.into_dart(),
+            Self::NoMatch => 3.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -659,25 +700,15 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Option<Vec<u8>> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <Vec<u8>>::sse_encode(value, serializer);
-        }
-    }
-}
-
 impl SseEncode for crate::api::ScrollStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(
             match self {
                 crate::api::ScrollStatus::Appended => 0,
-                crate::api::ScrollStatus::Unchanged => 1,
-                crate::api::ScrollStatus::NoMatch => 2,
-                crate::api::ScrollStatus::Full => 3,
+                crate::api::ScrollStatus::End => 1,
+                crate::api::ScrollStatus::Full => 2,
+                crate::api::ScrollStatus::NoMatch => 3,
                 _ => {
                     unimplemented!("");
                 }
@@ -693,7 +724,7 @@ impl SseEncode for crate::api::ScrollUpdate {
         <u32>::sse_encode(self.frames, serializer);
         <u32>::sse_encode(self.width, serializer);
         <u32>::sse_encode(self.height, serializer);
-        <Option<Vec<u8>>>::sse_encode(self.preview, serializer);
+        <Vec<u8>>::sse_encode(self.preview, serializer);
         <crate::api::ScrollStatus>::sse_encode(self.status, serializer);
     }
 }
