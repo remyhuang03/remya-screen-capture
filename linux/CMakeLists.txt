@@ -93,7 +93,7 @@ set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/top.remya.screen_capture.desktop"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications" COMPONENT Runtime)
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icons/screen_capture.svg"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icons/app_icon.svg"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/scalable/apps"
   RENAME "top.remya.screen_capture.svg" COMPONENT Runtime)
 

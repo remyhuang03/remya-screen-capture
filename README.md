@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icons/screen_capture.svg" width="128" alt="Remy'a Screen Capture icon">
+  <img src="assets/icons/app_icon-full.svg" width="128" alt="Remy'a Screen Capture icon">
 </p>
 
 <h1 align="center">Remy'a Screen Capture</h1>

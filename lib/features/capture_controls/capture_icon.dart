@@ -101,7 +101,7 @@ class CaptureAppIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Image.asset(
-    'assets/icons/screen_capture.png',
+    'assets/icons/app_icon.png',
     width: 40,
     height: 40,
     excludeFromSemantics: true,
