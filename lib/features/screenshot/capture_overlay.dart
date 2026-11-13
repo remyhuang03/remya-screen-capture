@@ -17,6 +17,7 @@ class CaptureOverlay extends StatefulWidget {
     required this.session,
     required this.output,
     required this.onCapture,
+    required this.onPickColor,
     required this.onScroll,
     required this.onBack,
     required this.onDone,
@@ -25,6 +26,7 @@ class CaptureOverlay extends StatefulWidget {
   final CaptureSession session;
   final FrozenOutput output;
   final ValueChanged<CaptureRequest> onCapture;
+  final VoidCallback onPickColor;
   final VoidCallback onScroll;
   final VoidCallback onBack;
   final VoidCallback onDone;
@@ -36,6 +38,7 @@ class CaptureOverlay extends StatefulWidget {
 class _CaptureOverlayState extends State<CaptureOverlay> {
   final _focus = FocusNode(debugLabel: 'Screenshot overlay');
   int? _pointerId;
+  Offset? _toolbarPosition;
 
   CaptureSession get session => widget.session;
   FrozenOutput get output => widget.output;
@@ -51,6 +54,15 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
       widget.onBack();
+      return .handled;
+    }
+    if (session.scroll == null &&
+        session.draft == null &&
+        const SingleActivator(
+          .keyC,
+          includeRepeats: false,
+        ).accepts(event, HardwareKeyboard.instance)) {
+      widget.onPickColor();
       return .handled;
     }
     if (key == LogicalKeyboardKey.enter &&
@@ -223,16 +235,26 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                     windowOutput.size,
                   ).size,
                 ),
-              if (active && selection == null && scroll == null)
-                Positioned(
-                  top: 24,
-                  left: 8,
-                  right: 8,
-                  child: Align(
-                    alignment: .topCenter,
+              if (active &&
+                  selection == null &&
+                  session.draft == null &&
+                  scroll == null)
+                Positioned.fill(
+                  child: CustomSingleChildLayout(
+                    delegate: _ModeToolbarLayout(_toolbarPosition),
                     child: _ModeToolbar(
                       mode: session.mode,
                       onChanged: (value) => session.changeMode(value, size),
+                      onDrag: (delta, toolbar) {
+                        final layout = _ModeToolbarLayout(_toolbarPosition);
+                        setState(
+                          () => _toolbarPosition = layout.positionFor(
+                            size,
+                            toolbar,
+                            delta: delta,
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -291,42 +313,83 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
   );
 }
 
+class _ModeToolbarLayout extends SingleChildLayoutDelegate {
+  const _ModeToolbarLayout(this.position);
+
+  final Offset? position;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints.loose(constraints.deflate(const .all(8)).biggest);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) =>
+      positionFor(size, childSize);
+
+  Offset positionFor(Size size, Size childSize, {Offset delta = Offset.zero}) {
+    final horizontal = size.width - childSize.width;
+    final vertical = size.height - childSize.height;
+    final target = position ?? Offset(horizontal / 2, 24);
+    return Offset(
+      (target.dx.clamp(0.0, horizontal) + delta.dx).clamp(0.0, horizontal),
+      (target.dy.clamp(0.0, vertical) + delta.dy).clamp(0.0, vertical),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_ModeToolbarLayout oldDelegate) =>
+      position != oldDelegate.position;
+}
+
 class _ModeToolbar extends StatelessWidget {
-  const _ModeToolbar({required this.mode, required this.onChanged});
+  const _ModeToolbar({
+    required this.mode,
+    required this.onChanged,
+    required this.onDrag,
+  });
 
   final CaptureMode mode;
   final ValueChanged<CaptureMode> onChanged;
+  final void Function(Offset delta, Size toolbar) onDrag;
 
   @override
-  Widget build(BuildContext context) => CaptureSurface(
-    child: Wrap(
-      alignment: .center,
-      crossAxisAlignment: .center,
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        CaptureSegmentedControl(
-          segments: const [
-            CaptureSegment(
-              CaptureMode.region,
-              'Region',
-              icon: CaptureIcon.segmentRegion(),
+  Widget build(BuildContext context) => MouseRegion(
+    cursor: SystemMouseCursors.grab,
+    child: GestureDetector(
+      behavior: .opaque,
+      dragStartBehavior: .down,
+      onPanUpdate: (details) => onDrag(details.delta, context.size!),
+      child: CaptureSurface(
+        child: Wrap(
+          alignment: .center,
+          crossAxisAlignment: .center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            CaptureSegmentedControl(
+              segments: const [
+                CaptureSegment(
+                  CaptureMode.region,
+                  'Region',
+                  icon: CaptureIcon.segmentRegion(),
+                ),
+                CaptureSegment(
+                  CaptureMode.window,
+                  'Window',
+                  icon: CaptureIcon(.window),
+                ),
+              ],
+              value: mode,
+              onChanged: onChanged,
             ),
-            CaptureSegment(
-              CaptureMode.window,
-              'Window',
-              icon: CaptureIcon(.window),
-            ),
+            const CaptureDivider(),
+            _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
+            _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
+            const _Hint('Tab', 'Switch'),
+            const _Hint('Esc', 'Cancel'),
           ],
-          value: mode,
-          onChanged: onChanged,
         ),
-        const CaptureDivider(),
-        _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
-        _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
-        const _Hint('Tab', 'Switch'),
-        const _Hint('Esc', 'Cancel'),
-      ],
+      ),
     ),
   );
 }

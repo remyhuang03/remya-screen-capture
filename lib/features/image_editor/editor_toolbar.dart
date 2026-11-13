@@ -20,22 +20,25 @@ class _EditorAppBar extends StatelessWidget {
             final tiny = constraints.maxWidth < 540;
             final title = _WindowDrag(
               onMove: editor.widget.onMoveWindow,
-              child: _EditorTitle(
-                name: editor._name,
-                size: editor._document.crop.size,
-                edited: editor._dirty,
-              ),
+              child: tiny
+                  ? const CaptureAppIcon()
+                  : _EditorTitle(
+                      name: editor._name,
+                      size: editor._document.crop.size,
+                      edited: editor._dirty,
+                    ),
             );
             return Padding(
               padding: const .symmetric(horizontal: 12),
               child: Row(
                 spacing: compact ? 2 : 8,
                 children: [
-                  if (!tiny)
-                    if (compact)
-                      Expanded(child: title)
-                    else
-                      SizedBox(width: 298, child: title),
+                  if (tiny)
+                    title
+                  else if (compact)
+                    Expanded(child: title)
+                  else
+                    SizedBox(width: 298, child: title),
                   if (!compact)
                     Expanded(
                       child: _WindowDrag(onMove: editor.widget.onMoveWindow),
@@ -96,7 +99,7 @@ class _EditorAppBar extends StatelessWidget {
                   CaptureIconButton(
                     icon: .redo,
                     label: 'Redo',
-                    shortcut: 'Ctrl+Shift+Z',
+                    shortcut: 'Ctrl+Y',
                     onPressed: editor._canRedo ? () => editor._step(1) : null,
                   ),
                   if (!tiny) const CaptureDivider(),
@@ -185,19 +188,7 @@ class _EditorTitle extends StatelessWidget {
     return Row(
       spacing: 8,
       children: [
-        SizedBox.square(
-          dimension: 40,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.primaryContainer,
-              borderRadius: .circular(14),
-            ),
-            child: IconTheme(
-              data: IconThemeData(color: colors.onPrimaryContainer),
-              child: const Center(child: CaptureIcon(.region)),
-            ),
-          ),
-        ),
+        const CaptureAppIcon(),
         Expanded(
           child: Column(
             mainAxisAlignment: .center,
@@ -520,21 +511,34 @@ class _TextOptions extends StatelessWidget {
   final _ImageEditorState editor;
   final _Style style;
 
+  Future<void> _chooseFont(BuildContext context) async {
+    final family = await showDialog<String>(
+      context: context,
+      builder: (_) => _FontPicker(selected: style.font),
+    );
+    if (!editor.mounted) return;
+    if (family != null && family != editor._style.font) {
+      editor._changeStyle(editor._style.copyWith(font: family));
+    }
+    if (editor._typing) editor._textFocus.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: .min,
     spacing: 4,
     children: [
-      CaptureDropdown<String>(
+      Semantics(
         label: 'Font',
-        options: const {
-          'Inter': 'Inter',
-          'sans-serif': 'Sans',
-          'serif': 'Serif',
-          'monospace': 'Monospace',
-        },
-        value: style.font,
-        onChanged: (value) => editor._changeStyle(style.copyWith(font: value)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
+          child: CaptureButton(
+            label: _FontPicker.label(style.font),
+            icon: const CaptureIcon(.dropdown),
+            variant: .tonal,
+            onPressed: () => _chooseFont(context),
+          ),
+        ),
       ),
       CaptureDropdown<double>(
         label: 'Font size',
@@ -586,9 +590,10 @@ class _TextOptions extends StatelessWidget {
 }
 
 class _EditorStatus extends StatelessWidget {
-  const _EditorStatus({required this.editor});
+  const _EditorStatus({required this.editor, required this.view});
 
   final _ImageEditorState editor;
+  final _View view;
 
   @override
   Widget build(BuildContext context) {
@@ -614,11 +619,12 @@ class _EditorStatus extends StatelessWidget {
               ),
               ValueListenableBuilder(
                 valueListenable: editor._cursor,
-                builder: (context, point, child) {
-                  final crop = editor._document.crop;
-                  if (point == null || !crop.contains(point)) {
+                builder: (context, cursor, child) {
+                  if (cursor == null || !view.visibleImage.contains(cursor)) {
                     return const SizedBox.shrink();
                   }
+                  final crop = view.crop;
+                  final point = view.toImage(cursor);
                   return Text(
                     '${(point.dx - crop.left).floor()}, ${(point.dy - crop.top).floor()}',
                     style: style,
@@ -662,7 +668,7 @@ Future<void> _showShortcuts(BuildContext context) => showDialog<void>(
               ]),
               const _ShortcutColumn('Edit & view', [
                 ('Undo', ['Ctrl', 'Z']),
-                ('Redo', ['Ctrl', 'Shift', 'Z']),
+                ('Redo', ['Ctrl', 'Y']),
                 ('Delete object', ['Del']),
                 ('Duplicate', ['Ctrl', 'D']),
                 ('Copy image', ['Ctrl', 'C']),

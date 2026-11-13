@@ -173,6 +173,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
             session: session,
             output: output,
             onCapture: (request) => unawaited(_capture(request)),
+            onPickColor: _openColorPicker,
             onScroll: () => unawaited(_startScrolling()),
             onBack: () => unawaited(_back()),
             onDone: () => unawaited(_finishScrolling()),
@@ -198,6 +199,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       _initializing = false;
     }
   }
+
+  void _openColorPicker() {}
 
   Future<bool> _lockCapture() async {
     _captureLock ??= await tryCaptureLock();

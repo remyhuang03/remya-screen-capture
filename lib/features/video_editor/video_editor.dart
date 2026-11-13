@@ -561,7 +561,7 @@ class _VideoEditorState extends State<VideoEditor> {
           const SingleActivator(.keyO): () => _moveTrim(false, _position.value),
           const SingleActivator(.keyZ, control: true): () =>
               setState(_trim!.undo),
-          const SingleActivator(.keyZ, control: true, shift: true): () =>
+          const SingleActivator(.keyY, control: true): () =>
               setState(_trim!.redo),
         },
       },
@@ -782,7 +782,7 @@ class _VideoEditorState extends State<VideoEditor> {
           ', / .   Step one frame\n'
           'I / O   Set the trim start or end\n'
           'Ctrl+Z   Undo trim\n'
-          'Ctrl+Shift+Z   Redo trim\n'
+          'Ctrl+Y   Redo trim\n'
           'Esc   Close',
         ),
         actions: [
@@ -857,19 +857,7 @@ class _EditorBar extends StatelessWidget {
                   child: Row(
                     spacing: 8,
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        alignment: .center,
-                        decoration: BoxDecoration(
-                          color: colors.primaryContainer,
-                          borderRadius: .circular(14),
-                        ),
-                        child: IconTheme(
-                          data: IconThemeData(color: colors.onPrimaryContainer),
-                          child: const CaptureIcon(.videocam),
-                        ),
-                      ),
+                      const CaptureAppIcon(),
                       Expanded(
                         child: Column(
                           mainAxisAlignment: .center,
@@ -901,11 +889,13 @@ class _EditorBar extends StatelessWidget {
               CaptureIconButton(
                 icon: .undo,
                 label: 'Undo trim',
+                shortcut: 'Ctrl+Z',
                 onPressed: onUndo,
               ),
               CaptureIconButton(
                 icon: .redo,
                 label: 'Redo trim',
+                shortcut: 'Ctrl+Y',
                 onPressed: onRedo,
               ),
               const SizedBox(height: 24, child: VerticalDivider(width: 1)),

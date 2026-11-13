@@ -1,7 +1,12 @@
 part of 'image_editor.dart';
 
 enum _Tool {
-  move('Move / select', 'V', .move, 'Select an object to move or resize it'),
+  move(
+    'Move / select',
+    'V',
+    .move,
+    'Drag to pan, scroll to zoom, or select an object',
+  ),
   pen('Pen', 'P', .pen, 'Drag to draw a stroke'),
   highlighter('Highlighter', 'H', .highlighter, 'Drag to highlight'),
   mosaic('Mosaic', 'M', .mosaic, 'Drag to obscure part of the image'),
@@ -28,6 +33,7 @@ enum _Tool {
   bool get isLine => this == .line || this == .arrow;
   bool get isShape => this == .rectangle || this == .ellipse;
   bool get freehand => this == .pen || this == .highlighter;
+  bool get hasBrushCursor => freehand || this == .mosaic;
 
   (double, double)? get sizes => switch (this) {
     .pen || .rectangle || .ellipse || .line || .arrow => (1, 12),
@@ -63,6 +69,8 @@ enum _Tool {
 enum _Mosaic { pixelate, blur }
 
 enum _LineEnds { line, arrow, double }
+
+const _highlighterOpacity = .38;
 
 enum _CropRatio {
   free('Free', null),
@@ -100,6 +108,7 @@ class _Style {
       .text => 22,
       _ => 4,
     },
+    brush: tool == .mosaic,
     ends: tool == .arrow ? .arrow : .line,
   );
 
@@ -116,9 +125,11 @@ class _Style {
   final bool underline;
 
   TextStyle get textStyle => TextStyle(
+    inherit: false,
     color: color,
     fontFamily: font,
     fontSize: size,
+    textBaseline: .alphabetic,
     fontWeight: bold ? .w700 : .w400,
     fontStyle: italic ? .italic : .normal,
     decoration: underline ? .underline : .none,
@@ -152,16 +163,30 @@ class _Style {
 }
 
 class _Annotation {
-  _Annotation(this.tool, List<Offset> points, this.style, {this.text = ''})
-    : points = List.unmodifiable(points);
+  _Annotation(
+    this.tool,
+    List<Offset> points,
+    this.style, {
+    this.text = '',
+    this.textWidth = double.infinity,
+  }) : points = List.unmodifiable(points);
 
   final _Tool tool;
   final List<Offset> points;
   final _Style style;
   final String text;
+  final double textWidth;
 
-  _Annotation copyWith({_Style? style, List<Offset>? points}) =>
-      _Annotation(tool, points ?? this.points, style ?? this.style, text: text);
+  _Annotation copyWith({_Style? style, List<Offset>? points}) => _Annotation(
+    tool,
+    points ?? this.points,
+    style ?? this.style,
+    text: text,
+    textWidth: textWidth,
+  );
+
+  TextPainter _layoutText() =>
+      _textPainter(text, style.textStyle, maxWidth: textWidth);
 
   _Annotation transform(Offset Function(Offset) apply) =>
       copyWith(points: points.map(apply).toList());
@@ -202,7 +227,7 @@ class _Annotation {
   Rect get bounds {
     final first = points.first;
     if (tool == .text) {
-      final painter = _textPainter(text, style.textStyle);
+      final painter = _layoutText();
       final rect = first & painter.size;
       painter.dispose();
       return rect;
@@ -279,24 +304,55 @@ class _Document {
 }
 
 class _View {
-  const _View(this.crop, this.size, this.zoom, this.pan, this.devicePixelRatio);
+  _View(
+    this.crop,
+    this.workspace,
+    double? zoom,
+    this.requestedPan,
+    this.devicePixelRatio,
+  ) : scale =
+          zoom ??
+          math
+              .min(
+                math.max(1, workspace.width - 156) / crop.width,
+                math.max(1, workspace.height - 144) / crop.height,
+              )
+              .clamp(.001, 1 / devicePixelRatio) {
+    final image = crop.size * scale;
+    final needsHorizontal = image.width > workspace.width;
+    final needsVertical = image.height > workspace.height;
+    final horizontal =
+        needsHorizontal ||
+        (needsVertical && image.width > workspace.width - _scrollbarExtent);
+    final vertical =
+        needsVertical ||
+        (needsHorizontal && image.height > workspace.height - _scrollbarExtent);
+    size = Size(
+      math.max(1, workspace.width - (vertical ? _scrollbarExtent : 0)),
+      math.max(1, workspace.height - (horizontal ? _scrollbarExtent : 0)),
+    );
+  }
 
   final Rect crop;
-  final Size size;
-  final double? zoom;
-  final Offset pan;
+  late final Size size;
+  final double scale;
+  final Size workspace;
+  final Offset requestedPan;
   final double devicePixelRatio;
+  Offset get overflow => Offset(
+    crop.width * scale - size.width,
+    crop.height * scale - size.height,
+  );
 
-  double get scale =>
-      zoom ??
-      math
-          .min(
-            math.max(1, size.width - 156) / crop.width,
-            math.max(1, size.height - 144) / crop.height,
-          )
-          .clamp(.001, 1 / devicePixelRatio);
+  Offset limitPan(Offset requested) {
+    final limit = Offset(overflow.dx.abs(), overflow.dy.abs()) / 2;
+    return _clampPoint(requested, Rect.fromPoints(-limit, limit));
+  }
 
+  Offset get pan => limitPan(requestedPan);
   Offset get origin => size.center(Offset.zero) + pan - crop.center * scale;
+  Rect get visibleImage => (toScreen(crop.topLeft) & (crop.size * scale))
+      .intersect(Offset.zero & size);
   Offset toImage(Offset point) => (point - origin) / scale;
   Offset toScreen(Offset point) => point * scale + origin;
 }
@@ -520,7 +576,7 @@ class _EditorRenderer {
     switch (object.tool) {
       case .pen || .highlighter:
         if (object.tool == .highlighter) {
-          paint.color = style.color.withValues(alpha: .38);
+          paint.color = style.color.withValues(alpha: _highlighterOpacity);
         }
         _stroke(canvas, object.points, paint);
       case .rectangle:
@@ -563,7 +619,7 @@ class _EditorRenderer {
         text.paint(canvas, start - text.size.center(Offset.zero));
         text.dispose();
       case .text:
-        final text = _textPainter(object.text, style.textStyle);
+        final text = object._layoutText();
         text.paint(canvas, start);
         text.dispose();
       case .mosaic:

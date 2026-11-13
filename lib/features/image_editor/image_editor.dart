@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -13,7 +14,9 @@ import '../capture_controls/capture_slider.dart';
 import '../capture_controls/capture_swatch.dart';
 
 part 'editor_document.dart';
+part 'editor_fonts.dart';
 part 'editor_toolbar.dart';
+part 'editor_viewport.dart';
 
 /// Edits a borrowed image and exports flattened PNG bytes at source resolution.
 class ImageEditor extends StatefulWidget {
@@ -64,6 +67,7 @@ class _ImageEditorState extends State<ImageEditor> {
   Rect? _crop;
   _CropRatio _cropRatio = .free;
   Offset? _textOrigin;
+  double? _textWidth;
   final _cursor = ValueNotifier<Offset?>(null);
   _Drag? _drag;
   _Annotation? _draft;
@@ -320,6 +324,9 @@ class _ImageEditorState extends State<ImageEditor> {
       _editingText = index;
       _selected = index;
       _textOrigin = origin;
+      _textWidth = index == null
+          ? math.max(1, _document.crop.right - origin.dx)
+          : _document.objects[index].textWidth;
       _text.text = index == null ? '' : _document.objects[index].text;
     });
     _textFocus.requestFocus();
@@ -335,6 +342,7 @@ class _ImageEditorState extends State<ImageEditor> {
           [_textOrigin!],
           _style,
           text: text,
+          textWidth: _textWidth!,
         );
         final editing = _editingText;
         if (editing == null) {
@@ -345,6 +353,7 @@ class _ImageEditorState extends State<ImageEditor> {
         }
       }
       _textOrigin = null;
+      _textWidth = null;
       _editingText = null;
       _text.clear();
     });
@@ -359,13 +368,16 @@ class _ImageEditorState extends State<ImageEditor> {
   }) {
     final scale = zoom.clamp(.001, 16.0);
     final imagePoint = view.toImage(anchor);
+    final next = _View(
+      view.crop,
+      view.workspace,
+      scale,
+      Offset.zero,
+      view.devicePixelRatio,
+    );
     setState(() {
       _zoom = scale;
-      _pan =
-          anchor +
-          delta -
-          view.size.center(Offset.zero) -
-          (imagePoint - _document.crop.center) * scale;
+      _pan = next.limitPan(anchor + delta - next.toScreen(imagePoint));
     });
   }
 
@@ -416,8 +428,10 @@ class _ImageEditorState extends State<ImageEditor> {
     } else if (ctrl) {
       final center = view.size.center(Offset.zero);
       switch (key) {
-        case LogicalKeyboardKey.keyZ:
-          _step(shift ? 1 : -1);
+        case LogicalKeyboardKey.keyZ when !shift:
+          _step(-1);
+        case LogicalKeyboardKey.keyY when !shift:
+          _step(1);
         case LogicalKeyboardKey.keyD:
           _duplicate();
         case LogicalKeyboardKey.keyC:
@@ -496,7 +510,7 @@ class _ImageEditorState extends State<ImageEditor> {
             HardwareKeyboard.instance.isLogicalKeyPressed(
               LogicalKeyboardKey.space,
             ))) {
-      _drag = _Drag(event.pointer, screen, pan: _pan);
+      _drag = _Drag(event.pointer, screen, pan: view.pan);
       return;
     }
     if (event.buttons != kPrimaryButton) return;
@@ -533,6 +547,8 @@ class _ImageEditorState extends State<ImageEditor> {
           _selected = _hit(point, tolerance);
           if (_selection case final _Annotation selected) {
             _drag = _Drag(event.pointer, point, object: selected);
+          } else {
+            _drag = _Drag(event.pointer, screen, pan: view.pan);
           }
         case .text:
           final hit = _hit(point, tolerance, tool: .text);
@@ -568,17 +584,17 @@ class _ImageEditorState extends State<ImageEditor> {
   }
 
   void _pointerMove(PointerMoveEvent event, _View view) {
+    final screen = event.localPosition;
+    _cursor.value = screen;
     final drag = _drag;
     if (drag == null || drag.pointer != event.pointer) return;
-    final screen = event.localPosition;
     if (drag.pan case final Offset pan) {
-      setState(() => _pan = pan + screen - drag.origin);
+      setState(() => _pan = view.limitPan(pan + screen - drag.origin));
       return;
     }
     final point = _clampPoint(view.toImage(screen), _document.crop);
     final delta = point - drag.origin;
     final constrain = HardwareKeyboard.instance.isShiftPressed;
-    _cursor.value = point;
     setState(() {
       if (drag.rect case final Rect crop) {
         final ratio =
@@ -618,6 +634,7 @@ class _ImageEditorState extends State<ImageEditor> {
       _drag = null;
       _draft = null;
       if (cancel) {
+        if (drag.pan != null) _pan = drag.pan!;
         if (drag.rect != null) _crop = drag.rect;
         return;
       }
@@ -654,7 +671,7 @@ class _ImageEditorState extends State<ImageEditor> {
             children: [
               _EditorAppBar(editor: this, view: view),
               Expanded(child: _buildWorkspace(view)),
-              _EditorStatus(editor: this),
+              _EditorStatus(editor: this, view: view),
             ],
           ),
         );
@@ -664,70 +681,21 @@ class _ImageEditorState extends State<ImageEditor> {
 
   Widget _buildWorkspace(_View view) {
     final colors = Theme.of(context).colorScheme;
+    final brush = _tool.hasBrushCursor;
+    final visibleImage = view.visibleImage;
+    final overflow = view.overflow;
     return Stack(
       fit: .expand,
       children: [
-        MouseRegion(
-          cursor: switch (_tool) {
-            .move => SystemMouseCursors.basic,
-            .text => SystemMouseCursors.text,
-            _ => SystemMouseCursors.precise,
-          },
-          onHover: (event) => _cursor.value = view.toImage(event.localPosition),
-          onExit: (_) => _cursor.value = null,
-          child: Listener(
-            behavior: .opaque,
-            onPointerDown: (event) => _pointerDown(event, view),
-            onPointerMove: (event) => _pointerMove(event, view),
-            onPointerUp: _pointerEnd,
-            onPointerCancel: (event) => _pointerEnd(event, cancel: true),
-            onPointerSignal: (event) {
-              if (event is PointerScrollEvent &&
-                  HardwareKeyboard.instance.isControlPressed) {
-                GestureBinding.instance.pointerSignalResolver.register(event, (
-                  _,
-                ) {
-                  _setZoom(
-                    view,
-                    view.scale * math.exp(-event.scrollDelta.dy / 420),
-                    event.localPosition,
-                  );
-                });
-              }
-            },
-            onPointerPanZoomStart: (_) => _pinchView = view,
-            onPointerPanZoomUpdate: (event) {
-              final start = _pinchView;
-              if (start != null) {
-                _setZoom(
-                  start,
-                  start.scale * event.scale,
-                  event.localPosition,
-                  delta: event.pan,
-                );
-              }
-            },
-            onPointerPanZoomEnd: (_) => _pinchView = null,
-            child: CustomPaint(
-              painter: _EditorPainter(
-                renderer: _renderer,
-                view: view,
-                document: _document,
-                colors: colors,
-                draft: _draft,
-                replacing: _drag?.object != null ? _selected : _editingText,
-                selection: _typing
-                    ? null
-                    : (_drag?.object != null ? _draft : _selection),
-                crop: _crop,
-              ),
-            ),
-          ),
+        Positioned.fromRect(
+          rect: Offset.zero & view.size,
+          child: _canvas(view, colors, brush, visibleImage),
         ),
-        if (_textOrigin case final Offset origin) _textField(view, origin),
+        if (_textOrigin case final Offset origin when !visibleImage.isEmpty)
+          _textField(view, origin),
         Positioned(
           top: 12,
-          bottom: 12,
+          bottom: 12 + (overflow.dx > 0 ? _scrollbarExtent : 0),
           left: 16,
           child: Center(child: _ToolRail(editor: this)),
         ),
@@ -736,41 +704,184 @@ class _ImageEditorState extends State<ImageEditor> {
             top: 16,
             left: 84,
             right: view.size.width >= 950 ? 84 : 12,
-            child: Align(child: _ToolOptions(editor: this)),
+            child: Align(
+              child: TextFieldTapRegion(child: _ToolOptions(editor: this)),
+            ),
+          ),
+        if (overflow.dx > 0)
+          Positioned(
+            left: 4,
+            width: math.max(0, view.size.width - 8),
+            bottom: 0,
+            height: _scrollbarExtent,
+            child: _CanvasScrollbar(
+              axis: .horizontal,
+              viewport: view.size.width,
+              overflow: overflow.dx,
+              offset: overflow.dx / 2 - view.pan.dx,
+              onScroll: (offset) => setState(() {
+                _pan = Offset(overflow.dx / 2 - offset, view.pan.dy);
+              }),
+            ),
+          ),
+        if (overflow.dy > 0)
+          Positioned(
+            top: 4,
+            height: math.max(0, view.size.height - 8),
+            right: 0,
+            width: _scrollbarExtent,
+            child: _CanvasScrollbar(
+              axis: .vertical,
+              viewport: view.size.height,
+              overflow: overflow.dy,
+              offset: overflow.dy / 2 - view.pan.dy,
+              onScroll: (offset) => setState(() {
+                _pan = Offset(view.pan.dx, overflow.dy / 2 - offset);
+              }),
+            ),
           ),
       ],
     );
   }
 
-  Widget _textField(_View view, Offset origin) {
-    final start = view.toScreen(origin);
-    final style = _style.textStyle.copyWith(fontSize: _style.size * view.scale);
-    return Positioned(
-      left: start.dx.clamp(0, math.max(0, view.size.width - 120)),
-      top: start.dy.clamp(0, math.max(0, view.size.height - 40)),
-      width: math.max(120, math.min(420, view.size.width - start.dx)),
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.enter, control: true):
-              _finishText,
-          const SingleActivator(LogicalKeyboardKey.escape): () =>
-              _finishText(cancel: true),
-        },
-        child: TextField(
-          focusNode: _textFocus,
-          autofocus: true,
-          controller: _text,
-          style: style,
-          minLines: 1,
-          maxLines: 8,
-          keyboardType: .multiline,
-          decoration: const InputDecoration(
-            isDense: true,
-            contentPadding: .zero,
-            filled: true,
-            labelText: 'Annotation text',
+  Widget _canvas(
+    _View view,
+    ColorScheme colors,
+    bool brush,
+    Rect visibleImage,
+  ) => MouseRegion(
+    cursor: switch (_tool) {
+      .move => SystemMouseCursors.basic,
+      .text => SystemMouseCursors.text,
+      _ when brush => SystemMouseCursors.basic,
+      _ => SystemMouseCursors.precise,
+    },
+    onEnter: (event) => _cursor.value = event.localPosition,
+    onHover: (event) => _cursor.value = event.localPosition,
+    onExit: (_) => _cursor.value = null,
+    child: Listener(
+      behavior: .opaque,
+      onPointerDown: (event) => _pointerDown(event, view),
+      onPointerMove: (event) => _pointerMove(event, view),
+      onPointerUp: _pointerEnd,
+      onPointerCancel: (event) => _pointerEnd(event, cancel: true),
+      onPointerSignal: (event) {
+        if (event is PointerScrollEvent &&
+            event.scrollDelta.dy != 0 &&
+            (_tool == .move || HardwareKeyboard.instance.isControlPressed)) {
+          GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+            _setZoom(
+              view,
+              view.scale * math.exp(-event.scrollDelta.dy / 420),
+              event.localPosition,
+            );
+          });
+        }
+      },
+      onPointerPanZoomStart: (_) => _pinchView = view,
+      onPointerPanZoomUpdate: (event) {
+        final start = _pinchView;
+        if (start != null) {
+          _setZoom(
+            start,
+            start.scale * event.scale,
+            event.localPosition,
+            delta: event.pan,
+          );
+        }
+      },
+      onPointerPanZoomEnd: (_) => _pinchView = null,
+      child: Stack(
+        fit: .expand,
+        children: [
+          CustomPaint(
+            painter: _EditorPainter(
+              renderer: _renderer,
+              view: view,
+              document: _document,
+              colors: colors,
+              draft: _draft,
+              replacing: _drag?.object != null ? _selected : _editingText,
+              selection: _typing
+                  ? null
+                  : (_drag?.object != null ? _draft : _selection),
+              crop: _crop,
+            ),
           ),
-          onTapOutside: (_) => _finishText(),
+          if (brush && !visibleImage.isEmpty)
+            Positioned.fromRect(
+              rect: visibleImage,
+              child: const MouseRegion(cursor: SystemMouseCursors.none),
+            ),
+          if (brush && (_draft == null || (_tool == .mosaic && !_style.brush)))
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _BrushCursor(
+                      _cursor,
+                      view,
+                      _renderer,
+                      _tool,
+                      _styles[_tool]!,
+                      colors.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _textField(_View view, Offset origin) {
+    final visible = view.visibleImage;
+    final start = view.toScreen(origin) - visible.topLeft;
+    const cursorWidth = 2.0;
+    return Positioned.fromRect(
+      rect: visible,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            Positioned(
+              left: start.dx,
+              top: start.dy,
+              // RenderEditable reserves the cursor width and a one-pixel gap.
+              width: _textWidth! + cursorWidth + 1,
+              child: Transform.scale(
+                alignment: .topLeft,
+                scale: view.scale,
+                child: MediaQuery.withNoTextScaling(
+                  child: Semantics(
+                    label: 'Annotation text',
+                    child: CallbackShortcuts(
+                      bindings: {
+                        const SingleActivator(.enter, control: true):
+                            _finishText,
+                        const SingleActivator(.escape): () =>
+                            _finishText(cancel: true),
+                      },
+                      child: TextField(
+                        focusNode: _textFocus,
+                        autofocus: true,
+                        controller: _text,
+                        style: _style.textStyle,
+                        strutStyle: .disabled,
+                        textDirection: .ltr,
+                        minLines: 1,
+                        maxLines: null,
+                        cursorWidth: cursorWidth,
+                        keyboardType: .multiline,
+                        decoration: null,
+                        onTapOutside: (_) => _finishText(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

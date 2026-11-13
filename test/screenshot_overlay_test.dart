@@ -120,18 +120,38 @@ void main() {
       final session = CaptureSession([output], [window('a')], output);
       addTearDown(session.dispose);
       final requests = <CaptureRequest>[];
+      var pickerRequests = 0;
       await tester.pumpWidget(
         MaterialApp(
           home: CaptureOverlay(
             session: session,
             output: output,
             onCapture: requests.add,
+            onPickColor: () => pickerRequests++,
             onScroll: () {},
             onBack: session.clearSelection,
             onDone: () {},
           ),
         ),
       );
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      expect(pickerRequests, 1);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(pickerRequests, 1);
+
+      final toolbarHint = find.text('Switch');
+      final before = tester.getCenter(toolbarHint);
+      await tester.dragFrom(
+        before,
+        const Offset(60, 48),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump();
+      expect(tester.getCenter(toolbarHint), before + const Offset(60, 48));
+      expect(requests, isEmpty);
+
       await tester.tapAt(const Offset(510, 330));
       await tester.pump();
       expect(requests.single.rect, const Rect.fromLTWH(0, 0, 1440, 1050));
@@ -143,7 +163,19 @@ void main() {
         buttons: kSecondaryMouseButton,
       );
       await mouse.moveTo(const Offset(440, 360));
-      await mouse.up();
+      await tester.pump();
+      expect(toolbarHint, findsNothing);
+      await mouse.cancel();
+      await tester.pump();
+      expect(tester.getCenter(toolbarHint), before + const Offset(60, 48));
+
+      final selection = await tester.startGesture(
+        const Offset(240, 200),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await selection.moveTo(const Offset(440, 360));
+      await selection.up();
       await tester.pump();
       expect(find.text('Edit'), findsOneWidget);
       expect(session.selection, const Rect.fromLTRB(360, 300, 660, 540));

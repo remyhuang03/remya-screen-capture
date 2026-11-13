@@ -28,5 +28,6 @@ flutter:
   assets:
     - LICENSE
     - assets/icons/capture/
+    - assets/icons/screen_capture.png
     - assets/licenses/material-symbols.txt
     - lib/src/rust/capture/THIRD_PARTY_NOTICES.txt
