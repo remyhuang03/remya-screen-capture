@@ -17,7 +17,7 @@
 
 - Run `remya_screen_capture` or open **Remy'a Screen Capture** from the application menu. Use **Tab** to cycle through Region, Window, and Color. Click in Region mode to capture that display, or drag to select an area on the starting display. Use the selection handles and arrow keys to refine the crop.
 - Use the left mouse button to copy and save to `Screenshots` in your XDG Pictures directory. Use the right mouse button to open the editor. The copied notification also offers **Edit**.
-- For a scrolling screenshot, draw a region, choose **Scrolling**, and scroll the underlying app downward in small steps. Select **Done** when the preview shows the content you want.
+- For a scrolling screenshot, draw a region and choose **Scrolling**. The app scrolls the content under the selection by itself and stitches each step, stopping at the end. Select **Done** to stop early and keep what was captured. This needs a compositor with `zwlr_virtual_pointer_v1`, which Hyprland provides.
 - In the editor, **Ctrl+C** copies the edited PNG, **Ctrl+S** saves it, and **Ctrl+Shift+S** chooses a destination. Open **Shortcuts** for drawing and navigation keys.
 
 To use Super+Shift+S, add this binding to your Hyprland configuration. Use the installed executable's absolute path if `~/.local/bin` is outside the session's `PATH`.
@@ -61,7 +61,7 @@ hl.bind("SUPER + R", hl.dsp.exec_cmd("remya_screen_capture --record"))
 - **Structure**:
   - `lib/main.dart` and `lib/app.dart`: Startup and theme.
   - `lib/features/`: Screenshot UI, image editor, and reusable capture controls.
-  - `lib/src/rust/capture/`: Wayland capture commands, PNG processing, and scroll stitching. See its third-party notices for the Shotori code and Rust dependency licenses.
+  - `lib/src/rust/capture/`: Wayland capture commands, PNG processing, and auto-scroll capture. See its third-party notices for Rust dependency licenses.
   - `linux/`: Linux GTK runner and desktop packaging.
   - `assets/icons/`: Application icon.
   - `tool/install.py`: XDG installation helper.

@@ -63,9 +63,6 @@ abstract class ScreenshotRustLibApiImplPlatform
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
-
-  @protected
   ScrollStatus dco_decode_scroll_status(dynamic raw);
 
   @protected
@@ -118,9 +115,6 @@ abstract class ScreenshotRustLibApiImplPlatform
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
-
-  @protected
-  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
   ScrollStatus sse_decode_scroll_status(SseDeserializer deserializer);
@@ -182,12 +176,6 @@ abstract class ScreenshotRustLibApiImplPlatform
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_list_prim_u_8_strict(
-    Uint8List? self,
     SseSerializer serializer,
   );
 

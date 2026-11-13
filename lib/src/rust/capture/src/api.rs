@@ -41,18 +41,24 @@ pub fn begin_scroll(
 pub struct ScrollCapture(Mutex<ScrollSession>);
 
 impl ScrollCapture {
-    pub fn sample(&self) -> Result<ScrollUpdate> {
-        self.0
-            .lock()
-            .map_err(|_| anyhow::anyhow!("The scrolling capture stopped unexpectedly"))?
-            .sample()
+    /// The selection as captured before scrolling.
+    pub fn seed(&self) -> Result<ScrollUpdate> {
+        self.session()?.seed()
+    }
+
+    /// Scrolls the selection once and stitches what it reveals.
+    pub fn step(&self) -> Result<ScrollUpdate> {
+        self.session()?.step()
     }
 
     pub fn finish(&self) -> Result<Vec<u8>> {
+        self.session()?.finish()
+    }
+
+    fn session(&self) -> Result<std::sync::MutexGuard<'_, ScrollSession>> {
         self.0
             .lock()
-            .map_err(|_| anyhow::anyhow!("The scrolling capture stopped unexpectedly"))?
-            .finish()
+            .map_err(|_| anyhow::anyhow!("The scrolling capture stopped unexpectedly"))
     }
 }
 
@@ -60,13 +66,18 @@ pub struct ScrollUpdate {
     pub frames: u32,
     pub width: u32,
     pub height: u32,
-    pub preview: Option<Vec<u8>>,
+    pub preview: Vec<u8>,
     pub status: ScrollStatus,
 }
 
+#[derive(Clone, Copy)]
 pub enum ScrollStatus {
+    /// New content was stitched; keep scrolling.
     Appended,
-    Unchanged,
-    NoMatch,
+    /// Scrolling no longer moves the content.
+    End,
+    /// The image reached its maximum size.
     Full,
+    /// The scrolled content could not be aligned with the capture.
+    NoMatch,
 }

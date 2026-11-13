@@ -172,13 +172,22 @@ void main() {
     );
     await laser.moveBy(const Offset(60, 0));
     await tester.pump();
-    expect(ink, paintsExactlyCountTimes(#drawCircle, 4));
+    const laserRed = Color(0xfff44336);
+    final laserPath = paints
+      ..something(
+        (method, arguments) =>
+            method == #drawPath &&
+            (arguments[1] as Paint).color.toARGB32() == laserRed.toARGB32(),
+      );
+    expect(ink, laserPath);
     await laser.up();
     await tester.pump();
-    expect(ink, paintsExactlyCountTimes(#drawCircle, 0));
+    // The trail fades out after release instead of vanishing.
+    expect(ink, laserPath);
 
     await tester.tap(find.byTooltip('Laser pointer'));
     await tester.pump();
+    expect(ink, isNot(laserPath));
     expect(inputs[1]!.rectangles, isNot(contains(area)));
     await _closeHuds(tester, controller);
   });

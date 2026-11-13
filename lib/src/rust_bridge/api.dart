@@ -7,6 +7,9 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `session`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`
+
 Future<Uint8List> captureOutput({required String name}) =>
     ScreenshotRustLib.instance.api.crateApiCaptureOutput(name: name);
 
@@ -60,23 +63,39 @@ Future<ScrollCapture> beginScroll({
 abstract class ScrollCapture implements RustOpaqueInterface {
   Future<Uint8List> finish();
 
-  Future<ScrollUpdate> sample();
+  /// The selection as captured before scrolling.
+  Future<ScrollUpdate> seed();
+
+  /// Scrolls the selection once and stitches what it reveals.
+  Future<ScrollUpdate> step();
 }
 
-enum ScrollStatus { appended, unchanged, noMatch, full }
+enum ScrollStatus {
+  /// New content was stitched; keep scrolling.
+  appended,
+
+  /// Scrolling no longer moves the content.
+  end,
+
+  /// The image reached its maximum size.
+  full,
+
+  /// The scrolled content could not be aligned with the capture.
+  noMatch,
+}
 
 class ScrollUpdate {
   final int frames;
   final int width;
   final int height;
-  final Uint8List? preview;
+  final Uint8List preview;
   final ScrollStatus status;
 
   const ScrollUpdate({
     required this.frames,
     required this.width,
     required this.height,
-    this.preview,
+    required this.preview,
     required this.status,
   });
 

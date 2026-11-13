@@ -73,7 +73,7 @@ class ScreenshotRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -940197843;
+  int get rustContentHash => -1437182103;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -87,9 +87,9 @@ class ScreenshotRustLib
 abstract class ScreenshotRustLibApi extends BaseApi {
   Future<Uint8List> crateApiScrollCaptureFinish({required ScrollCapture that});
 
-  Future<ScrollUpdate> crateApiScrollCaptureSample({
-    required ScrollCapture that,
-  });
+  Future<ScrollUpdate> crateApiScrollCaptureSeed({required ScrollCapture that});
+
+  Future<ScrollUpdate> crateApiScrollCaptureStep({required ScrollCapture that});
 
   Future<ScrollCapture> crateApiBeginScroll({
     required String output,
@@ -174,7 +174,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
       );
 
   @override
-  Future<ScrollUpdate> crateApiScrollCaptureSample({
+  Future<ScrollUpdate> crateApiScrollCaptureSeed({
     required ScrollCapture that,
   }) {
     return handler.executeNormal(
@@ -196,18 +196,48 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           decodeSuccessData: sse_decode_scroll_update,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiScrollCaptureSampleConstMeta,
+        constMeta: kCrateApiScrollCaptureSeedConstMeta,
         argValues: [that],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiScrollCaptureSampleConstMeta =>
-      const TaskConstMeta(
-        debugName: "ScrollCapture_sample",
-        argNames: ["that"],
-      );
+  TaskConstMeta get kCrateApiScrollCaptureSeedConstMeta =>
+      const TaskConstMeta(debugName: "ScrollCapture_seed", argNames: ["that"]);
+
+  @override
+  Future<ScrollUpdate> crateApiScrollCaptureStep({
+    required ScrollCapture that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerScrollCapture(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_scroll_update,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiScrollCaptureStepConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiScrollCaptureStepConstMeta =>
+      const TaskConstMeta(debugName: "ScrollCapture_step", argNames: ["that"]);
 
   @override
   Future<ScrollCapture> crateApiBeginScroll({
@@ -229,7 +259,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -260,7 +290,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -288,7 +318,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -316,7 +346,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -354,7 +384,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -392,7 +422,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -484,12 +514,6 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
-  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
-  }
-
-  @protected
   ScrollStatus dco_decode_scroll_status(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ScrollStatus.values[raw as int];
@@ -505,7 +529,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
       frames: dco_decode_u_32(arr[0]),
       width: dco_decode_u_32(arr[1]),
       height: dco_decode_u_32(arr[2]),
-      preview: dco_decode_opt_list_prim_u_8_strict(arr[3]),
+      preview: dco_decode_list_prim_u_8_strict(arr[3]),
       status: dco_decode_scroll_status(arr[4]),
     );
   }
@@ -611,17 +635,6 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
-  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_list_prim_u_8_strict(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
   ScrollStatus sse_decode_scroll_status(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -634,7 +647,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
     var var_frames = sse_decode_u_32(deserializer);
     var var_width = sse_decode_u_32(deserializer);
     var var_height = sse_decode_u_32(deserializer);
-    var var_preview = sse_decode_opt_list_prim_u_8_strict(deserializer);
+    var var_preview = sse_decode_list_prim_u_8_strict(deserializer);
     var var_status = sse_decode_scroll_status(deserializer);
     return ScrollUpdate(
       frames: var_frames,
@@ -757,19 +770,6 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
-  void sse_encode_opt_list_prim_u_8_strict(
-    Uint8List? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_list_prim_u_8_strict(self, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_scroll_status(ScrollStatus self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
@@ -781,7 +781,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
     sse_encode_u_32(self.frames, serializer);
     sse_encode_u_32(self.width, serializer);
     sse_encode_u_32(self.height, serializer);
-    sse_encode_opt_list_prim_u_8_strict(self.preview, serializer);
+    sse_encode_list_prim_u_8_strict(self.preview, serializer);
     sse_encode_scroll_status(self.status, serializer);
   }
 
@@ -837,6 +837,11 @@ class ScrollCaptureImpl extends RustOpaque implements ScrollCapture {
   Future<Uint8List> finish() =>
       ScreenshotRustLib.instance.api.crateApiScrollCaptureFinish(that: this);
 
-  Future<ScrollUpdate> sample() =>
-      ScreenshotRustLib.instance.api.crateApiScrollCaptureSample(that: this);
+  /// The selection as captured before scrolling.
+  Future<ScrollUpdate> seed() =>
+      ScreenshotRustLib.instance.api.crateApiScrollCaptureSeed(that: this);
+
+  /// Scrolls the selection once and stitches what it reveals.
+  Future<ScrollUpdate> step() =>
+      ScreenshotRustLib.instance.api.crateApiScrollCaptureStep(that: this);
 }

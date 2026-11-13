@@ -16,6 +16,7 @@ import '../capture_controls/capture_labels.dart';
 import '../capture_controls/capture_slider.dart';
 import '../capture_controls/capture_swatch.dart';
 import '../screenshot/capture_geometry.dart';
+import 'laser_trail.dart';
 
 enum _Annotation { none, marker, laser }
 
@@ -24,7 +25,6 @@ const _optionsSize = Size(514, 50);
 const _panelGap = 8.0;
 const _dockDistance = 14.0;
 const _edgeTrigger = 4.0;
-const _laserLifetime = Duration(milliseconds: 600);
 const _recordingOutline = Color(0xfff2b8b5);
 const _markerPresets = {
   'Red': Color(0xfff44336),
@@ -90,7 +90,9 @@ class RecordingHudController extends ChangeNotifier {
   final _ink = ChangeNotifier();
   final _laserClock = Stopwatch();
   final _strokes = <_MarkerStroke>[];
-  final _laser = <({Offset point, Duration time})>[];
+  final _laserTrail = LaserTrail();
+  bool _laserHeld = false;
+  Offset _laserPointer = Offset.zero;
   late final Timer _clockTimer;
   late CaptureMonitor _toolbarMonitor = target;
   late Offset _position;
@@ -331,6 +333,7 @@ class RecordingHudController extends ChangeNotifier {
 
   void _toggleTool(_Annotation annotation) {
     _endDrawing(_drawingPointer);
+    _stopLaser();
     _annotation = _annotation == annotation ? .none : annotation;
     notifyListeners();
   }
@@ -376,21 +379,33 @@ class RecordingHudController extends ChangeNotifier {
     if (_annotation == .marker) {
       _strokes.add(_MarkerStroke(point, _markerColor, _markerWidth));
     } else {
+      // A new stroke drops any fading trail, so restarting the clock is safe.
+      _laserTrail.clear();
+      _laserHeld = true;
       _laserClock
         ..reset()
         ..start();
-      _laser.add((point: point, time: Duration.zero));
-      _laserTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
-        final oldest = _laserClock.elapsed - _laserLifetime;
-        if (_laser.length > 1) {
-          final head = _laser.removeLast();
-          _laser.removeWhere((sample) => sample.time <= oldest);
-          _laser.add(head);
-        }
+      _laserPointer = point;
+      _laserTrail.add(point, _laserClock.elapsed);
+      _laserTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
+        // Streamlining lags the head, so keep easing it onto a resting pointer.
+        if (_laserHeld) _laserTrail.add(_laserPointer, _laserClock.elapsed);
+        _laserTrail.prune(_laserClock.elapsed, keepHead: _laserHeld);
+        if (_laserTrail.isEmpty && !_laserHeld) _stopLaser();
         _ink.notifyListeners();
       });
     }
     _ink.notifyListeners();
+  }
+
+  void _stopLaser() {
+    _laserTimer?.cancel();
+    _laserTimer = null;
+    _laserClock
+      ..stop()
+      ..reset();
+    _laserTrail.clear();
+    _laserHeld = false;
   }
 
   void _moveDrawing(int pointer, Offset point) {
@@ -400,7 +415,8 @@ class RecordingHudController extends ChangeNotifier {
       stroke.path.lineTo(point.dx, point.dy);
       stroke.extended = true;
     } else if (_annotation == .laser) {
-      _laser.add((point: point, time: _laserClock.elapsed));
+      _laserPointer = point;
+      _laserTrail.add(point, _laserClock.elapsed);
     }
     _ink.notifyListeners();
   }
@@ -408,14 +424,14 @@ class RecordingHudController extends ChangeNotifier {
   void _endDrawing(int? pointer) {
     if (pointer == null || pointer != _drawingPointer) return;
     _drawingPointer = null;
-    _laserTimer?.cancel();
-    _laserClock.stop();
-    _laser.clear();
+    // The trail keeps fading through _laserTimer after release.
+    _laserHeld = false;
     _ink.notifyListeners();
   }
 
   void _clear() {
     _endDrawing(_drawingPointer);
+    _stopLaser();
     _strokes.clear();
     _ink.notifyListeners();
   }
@@ -973,31 +989,12 @@ class _RecordingInk extends CustomPainter {
       }
     }
 
-    final laser = controller._laser;
-    if (laser.isNotEmpty) {
-      const red = Color(0xfff44336);
-      final now = controller._laserClock.elapsed;
-      final lifetime = _laserLifetime.inMicroseconds;
-      for (final sample in laser.take(laser.length - 1)) {
-        final age = (now - sample.time).inMicroseconds;
-        final alpha = (1 - age / lifetime).clamp(0.0, 1.0);
-        canvas.drawCircle(
-          sample.point,
-          2 + alpha * 4,
-          Paint()..color = red.withValues(alpha: alpha * .75),
-        );
-      }
-      final head = laser.last.point;
-      canvas.drawCircle(
-        head,
-        9,
-        Paint()
-          ..color = red.withValues(alpha: .75)
-          ..maskFilter = const MaskFilter.blur(.normal, 6),
-      );
-      canvas.drawCircle(head, 8, Paint()..color = Colors.white);
-      canvas.drawCircle(head, 6, Paint()..color = red);
-    }
+    paintLaser(
+      canvas,
+      controller._laserTrail,
+      controller._laserClock.elapsed,
+      keepHead: controller._laserHeld,
+    );
     canvas.restore();
   }
 
