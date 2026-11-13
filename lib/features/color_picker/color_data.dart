@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'dart:ui' show Color, Offset;
 
 import 'package:flutter/painting.dart' show HSLColor, HSVColor;
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:remya_client/remya_client.dart';
 
 enum ColorFormat {
   hex,
@@ -157,24 +159,42 @@ class ColorPickerPreferences {
   final List<ColorFormat> formats;
   final int historySize;
 
-  static ColorPickerPreferences _fromJson(Object? json) {
-    if (json is! Map<String, dynamic>) return ColorPickerPreferences();
-    final saved = json['formats'];
-    final formats = saved is List
-        ? saved
-              .map((value) => _enumValue(ColorFormat.values, value))
-              .nonNulls
-              .toList()
-        : defaultFormats;
-    final history = json['historySize'];
+  static ColorPickerPreferences fromJson(Object? json) {
+    if (json is! Map<String, dynamic> ||
+        _enumValue(ColorPickAction.values, json['action']) == null ||
+        _enumValue(ColorFormat.values, json['defaultFormat']) == null ||
+        json['uppercase'] is! bool ||
+        json['historySize'] is! int ||
+        (json['historySize'] as int) < 0 ||
+        (json['historySize'] as int) > 128 ||
+        json['formats'] is! List) {
+      throw const FormatException(
+        'Invalid color picker preferences from Remya Core.',
+      );
+    }
+    final saved = json['formats'] as List;
+    final formats = saved
+        .map((value) => _enumValue(ColorFormat.values, value))
+        .toList();
+    if (formats.isEmpty ||
+        formats.contains(null) ||
+        formats.toSet().length != formats.length ||
+        !formats.contains(
+          _enumValue(ColorFormat.values, json['defaultFormat']),
+        )) {
+      throw const FormatException(
+        'Invalid color picker formats from Remya Core.',
+      );
+    }
+    final history = json['historySize'] as int;
     return ColorPickerPreferences(
       action:
           _enumValue(ColorPickAction.values, json['action']) ?? .copyAndOpen,
       defaultFormat:
           _enumValue(ColorFormat.values, json['defaultFormat']) ?? .hex,
       uppercase: json['uppercase'] != false,
-      formats: formats,
-      historySize: history is int ? history : 32,
+      formats: formats.cast<ColorFormat>(),
+      historySize: history,
     );
   }
 
@@ -250,39 +270,43 @@ class PickedColor {
 }
 
 class ColorPickerStore {
-  ColorPickerStore({Directory? stateDirectory, Directory? configDirectory})
+  ColorPickerStore({Directory? stateDirectory, this.preferences})
     : _history = stateDirectory == null
           ? _xdgFile(
               'XDG_STATE_HOME',
               '.local/state',
               'remya-capture/colors.json',
             )
-          : File('${stateDirectory.path}/colors.json'),
-      _preferences = configDirectory == null
-          ? _xdgFile(
-              'XDG_CONFIG_HOME',
-              '.config',
-              'remya/screen-capture/color-picker.json',
-            )
-          : File('${configDirectory.path}/color-picker.json');
+          : File('${stateDirectory.path}/colors.json');
 
   final File? _history;
-  final File? _preferences;
+  final AppPreferences? preferences;
+  ColorPickerPreferences _current = ColorPickerPreferences();
+
+  Future<Map<String, dynamic>> _call(
+    Future<Map<String, dynamic>> Function(AppPreferences) operation,
+  ) async {
+    final store = preferences ?? AppPreferences('remya-screen-capture');
+    try {
+      return await operation(store);
+    } finally {
+      if (preferences == null) await store.close();
+    }
+  }
 
   // POSIX file locks serialize separate processes, so queue writes in this isolate too.
   static Future<void> _pendingHistory = Future.value();
 
-  Future<ColorPickerPreferences> readPreferences() async =>
-      ColorPickerPreferences._fromJson(await _readJson(_preferences));
+  Future<ColorPickerPreferences> readPreferences() async {
+    final reply = await _call((store) => store.get('color-picker'));
+    return _current = ColorPickerPreferences.fromJson(reply['value']);
+  }
 
   Future<void> writePreferences(ColorPickerPreferences preferences) async {
-    final file = _preferences;
-    if (file == null) {
-      throw StateError(
-        'Could not locate the color picker configuration directory.',
-      );
-    }
-    await _writeJson(file, preferences._toJson());
+    final reply = await _call(
+      (store) => store.set('color-picker', preferences._toJson()),
+    );
+    _current = ColorPickerPreferences.fromJson(reply['value']);
     if (_history != null && await _history.exists()) {
       await _updateHistory(preferences.historySize, (entries) => entries);
     }
@@ -327,13 +351,12 @@ class ColorPickerStore {
       final lock = await File('${file.path}.lock').open(mode: .append);
       try {
         await lock.lock(.blockingExclusive);
-        final savedPreferences = await _readJson(_preferences);
-        final capacity = savedPreferences == null
-            ? limit
-            : math.min(
-                limit,
-                ColorPickerPreferences._fromJson(savedPreferences).historySize,
-              );
+        try {
+          await readPreferences();
+        } catch (error) {
+          debugPrint('Could not read color picker settings. $error');
+        }
+        final capacity = math.min(limit, _current.historySize);
         final next = update(await readHistory())
             .take(capacity.clamp(0, 128))
             .toList();

@@ -5,6 +5,8 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remya_screen_capture/features/color_picker/color_data.dart';
 
+import 'fake_app_preferences.dart';
+
 void main() {
   test('formats colors from the same sRGB bytes', () {
     const red = Color(0xffff0000);
@@ -33,12 +35,14 @@ void main() {
 
   late Directory directory;
   late ColorPickerStore store;
+  late FakeAppPreferences preferences;
 
   ColorPickerStore openStore() =>
-      ColorPickerStore(stateDirectory: directory, configDirectory: directory);
+      ColorPickerStore(stateDirectory: directory, preferences: preferences);
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('remya-color-test-');
+    preferences = FakeAppPreferences();
     store = openStore();
   });
   tearDown(() => directory.delete(recursive: true));
@@ -107,6 +111,36 @@ void main() {
       expect(await store.readHistory(), [second]);
     },
   );
+
+  test(
+    'Core failures keep the last valid capacity and report preference errors',
+    () async {
+      await store.writePreferences(ColorPickerPreferences(historySize: 1));
+      preferences.unavailable = true;
+      await expectLater(store.readPreferences(), throwsStateError);
+      await expectLater(
+        store.writePreferences(ColorPickerPreferences(historySize: 8)),
+        throwsStateError,
+      );
+      await store.add(pick(0xff0000), 32);
+      expect(await store.add(pick(0x0000ff), 32), hasLength(1));
+      expect(
+        await directory
+            .list()
+            .map((file) => file.path.split('/').last)
+            .toList(),
+        unorderedEquals(['colors.json', 'colors.json.lock']),
+      );
+    },
+  );
+
+  test('invalid Core values retain the last valid preferences', () async {
+    await store.writePreferences(ColorPickerPreferences(historySize: 1));
+    preferences.values['color-picker'] = {'historySize': 'invalid'};
+    await expectLater(store.readPreferences(), throwsFormatException);
+    await store.add(pick(0xff0000), 32);
+    expect(await store.add(pick(0x0000ff), 32), hasLength(1));
+  });
 
   test('skips invalid history entries and tolerates malformed JSON', () async {
     final sample = pick(0xff0000);

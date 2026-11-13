@@ -1,0 +1,297 @@
+{
+  "version": 1,
+  "id": "remya-screen-capture",
+  "app": "top.remya.screen_capture",
+  "title": "Remya Screen Capture",
+  "icon": "top.remya.screen_capture",
+  "config": "screen-capture",
+  "pages": [
+    {
+      "id": "recording",
+      "title": "Recording",
+      "keywords": []
+    },
+    {
+      "id": "color-picker",
+      "title": "Color picker",
+      "keywords": []
+    }
+  ],
+  "settings": {
+    "recording": {
+      "title": "Recording",
+      "page": "recording",
+      "keywords": [],
+      "default": {
+        "systemAudio": true,
+        "microphone": false,
+        "cursor": true
+      },
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "systemAudio": {
+            "type": "boolean"
+          },
+          "microphone": {
+            "type": "boolean"
+          },
+          "cursor": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "systemAudio",
+          "microphone",
+          "cursor"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "color-picker": {
+      "title": "Color picker",
+      "page": "color-picker",
+      "keywords": [],
+      "default": {
+        "action": "copyAndOpen",
+        "defaultFormat": "hex",
+        "uppercase": true,
+        "formats": [
+          "hex",
+          "rgb",
+          "hsl",
+          "hsv",
+          "oklch",
+          "hypr",
+          "float"
+        ],
+        "historySize": 32
+      },
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "enum": [
+              "copyAndOpen",
+              "copyOnly",
+              "openOnly"
+            ]
+          },
+          "defaultFormat": {
+            "enum": [
+              "hex",
+              "rgb",
+              "hsl",
+              "hsv",
+              "oklch",
+              "hypr",
+              "float",
+              "cmyk",
+              "lab"
+            ]
+          },
+          "uppercase": {
+            "type": "boolean"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "hex",
+                "rgb",
+                "hsl",
+                "hsv",
+                "oklch",
+                "hypr",
+                "float",
+                "cmyk",
+                "lab"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "historySize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          }
+        },
+        "required": [
+          "action",
+          "defaultFormat",
+          "uppercase",
+          "formats",
+          "historySize"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "hex"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "hex"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "rgb"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "rgb"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "hsl"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "hsl"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "hsv"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "hsv"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "oklch"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "oklch"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "hypr"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "hypr"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "float"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "float"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "cmyk"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "cmyk"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "defaultFormat": {
+                  "const": "lab"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "const": "lab"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

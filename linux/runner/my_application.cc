@@ -2,6 +2,8 @@
 
 #include <clocale>
 
+#include "flutter/generated_plugin_registrant.h"
+
 #include "capture_windows.h"
 
 struct _MyApplication {
@@ -15,6 +17,20 @@ static void my_application_activate(GApplication* application) {
   auto* self = MY_APPLICATION(application);
   // GTK sets the process locale at startup. libmpv requires C numeric parsing.
   std::setlocale(LC_NUMERIC, "C");
+  if (self->dart_entrypoint_arguments != nullptr &&
+      g_strv_contains(self->dart_entrypoint_arguments, "--settings")) {
+    g_autoptr(FlDartProject) project = fl_dart_project_new();
+    fl_dart_project_set_dart_entrypoint_arguments(
+        project, self->dart_entrypoint_arguments);
+    auto* window = gtk_application_window_new(GTK_APPLICATION(application));
+    gtk_window_set_title(GTK_WINDOW(window), "Remya Screen Capture Settings");
+    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+    auto* view = fl_view_new(project);
+    fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+    gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+    gtk_widget_show_all(window);
+    return;
+  }
   start_capture_windows(GTK_APPLICATION(application),
                         self->dart_entrypoint_arguments);
 }

@@ -17,7 +17,7 @@ can agree on scope. Report vulnerabilities through the
    `fix/region-selection` or `docs/installation`.
 2. Follow the [development setup](README.md#-development). Use the Flutter SDK
    pinned in `.fvmrc` via FVM, the Rust toolchain pinned in `rust-toolchain.toml`,
-   and a sibling `remya-settings` checkout for `remya_settings_client`.
+   and a sibling `remya-core` checkout for `remya_client` and `remya_ui`.
 3. Keep the pull request focused. Follow the [project guidelines](AGENTS.md) for
    architecture, accessible UI, and regenerating Rust bridge bindings when the
    bridge API changes. Add a regression test for non-trivial fixes when practical.
