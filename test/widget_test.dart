@@ -7,6 +7,7 @@ import 'package:remya_screen_capture/features/capture_controls/capture_color_pic
 import 'package:remya_screen_capture/features/capture_controls/capture_controls_preview.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_icon.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_selection.dart';
+import 'package:remya_screen_capture/main.dart';
 
 void main() {
   const preview = RemyaScreenCaptureApp(home: CaptureControlsPreview());
@@ -238,4 +239,16 @@ void main() {
     expect(rect, small.shift(const Offset(20, 20)));
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'parseEntrypoint recognizes screenshot, record and color picker flags',
+    () {
+      expect(parseEntrypoint(const []), CaptureEntrypoint.screenshot);
+      expect(parseEntrypoint(const ['--record']), CaptureEntrypoint.recording);
+      expect(
+        parseEntrypoint(const ['--color-picker']),
+        CaptureEntrypoint.colorPicker,
+      );
+    },
+  );
 }
