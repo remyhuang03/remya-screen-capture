@@ -15,7 +15,7 @@
 
 ## Screenshots
 
-- Run `remya_screen_capture` or open **Remy'a Screen Capture** from the application menu. Use **Tab** to switch between Region and Window. Click in Region mode to capture that display, or drag to select an area on the starting display. Use the selection handles and arrow keys to refine the crop.
+- Run `remya_screen_capture` or open **Remy'a Screen Capture** from the application menu. Use **Tab** to cycle through Region, Window, and Color. Click in Region mode to capture that display, or drag to select an area on the starting display. Use the selection handles and arrow keys to refine the crop.
 - Use the left mouse button to copy and save to `Screenshots` in your XDG Pictures directory. Use the right mouse button to open the editor. The copied notification also offers **Edit**.
 - For a scrolling screenshot, draw a region, choose **Scrolling**, and scroll the underlying app downward in small steps. Select **Done** when the preview shows the content you want.
 - In the editor, **Ctrl+C** copies the edited PNG, **Ctrl+S** saves it, and **Ctrl+Shift+S** chooses a destination. Open **Shortcuts** for drawing and navigation keys.
@@ -24,6 +24,18 @@ To use Super+Shift+S, add this binding to your Hyprland configuration. Use the i
 
 ```lua
 hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd("remya_screen_capture"))
+```
+
+## Color picker
+
+- Run `remya_screen_capture --color-picker`, select **Pick color** from the application actions, or press **C** in the screenshot overlay. **C** returns to the previous capture mode and preserves the selection.
+- Click or press **Enter** to sample a pixel and copy its value. **Shift+click** adds it to history and keeps the picker open. Scroll to zoom the loupe, use **F** to change its format, and use the arrow keys to move by one physical pixel or ten with **Shift**.
+- The result panel shows color formats, contrast, and shades. Use **Adjust** to edit HSL or open the panel's settings to choose copy behavior, enabled formats, and history size. Press **H** in Color mode to reopen history.
+
+The default Hyprland shortcut is **Super+Shift+C**. If your config already binds that chord, remove the old binding before adding this one.
+
+```lua
+hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picker"))
 ```
 
 ## Screen recordings

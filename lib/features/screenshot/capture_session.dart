@@ -3,9 +3,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Color, Offset, Rect, Size;
 
+import '../color_picker/color_data.dart';
 import 'capture_geometry.dart';
 
-enum CaptureMode { region, window }
+enum CaptureMode { region, window, color }
 
 class FrozenOutput {
   FrozenOutput(this.monitor, this.png, this.image, this.pixels);
@@ -17,6 +18,23 @@ class FrozenOutput {
 
   Size get size => Size(image.width.toDouble(), image.height.toDouble());
   String get name => monitor.name;
+
+  Offset clampPixel(Offset position) => Offset(
+    position.dx.floor().clamp(0, image.width - 1).toDouble(),
+    position.dy.floor().clamp(0, image.height - 1).toDouble(),
+  );
+
+  Offset pixelAt(Offset position, Size viewport) => clampPixel(
+    Offset(
+      position.dx * size.width / viewport.width,
+      position.dy * size.height / viewport.height,
+    ),
+  );
+
+  Offset logicalAt(Offset pixel, Size viewport) => Offset(
+    pixel.dx * viewport.width / size.width,
+    pixel.dy * viewport.height / size.height,
+  );
 
   Color colorAt(Offset position) {
     final x = position.dx.floor().clamp(0, image.width - 1);
@@ -49,14 +67,28 @@ typedef ScrollPreview = ({
 });
 
 class CaptureSession extends ChangeNotifier {
-  CaptureSession(this.outputs, this.windows, this.active);
+  CaptureSession(
+    this.outputs,
+    this.windows,
+    this.active, {
+    this.mode = .region,
+    this.uppercaseHex = true,
+  });
 
   final List<FrozenOutput> outputs;
   final List<CaptureWindow> windows;
+  final bool uppercaseHex;
   FrozenOutput active;
-  CaptureMode mode = .region;
-  Rect? selection;
+  CaptureMode mode;
+  CaptureMode _previousMode = .region;
+  Rect? _selection;
+  FrozenOutput? _selectionOutput;
+  ({FrozenOutput output, Offset position, Size viewport})? _hover;
   Offset? pointer;
+  Offset? colorPixel;
+  Size? _colorViewport;
+  ColorFormat colorFormat = .hex;
+  int zoom = 12;
   CaptureWindow? hoveredWindow;
   bool edit = false;
   bool busy = false;
@@ -66,10 +98,18 @@ class CaptureSession extends ChangeNotifier {
   Offset? _origin;
   Rect? draft;
 
+  Rect? get selection => mode == .region ? _selection : null;
+
   void hover(FrozenOutput output, Offset position, Size viewport) {
-    if (busy || selection != null || _origin != null || scroll != null) return;
+    if (_origin != null || scroll != null) return;
+    _hover = (output: output, position: position, viewport: viewport);
+    if (busy || selection != null) return;
     active = output;
     pointer = position;
+    if (mode == .color) {
+      _colorViewport = viewport;
+      colorPixel = output.pixelAt(position, viewport);
+    }
     if (mode == .window) {
       final monitor = output.monitor;
       hoveredWindow = windowAt(
@@ -86,16 +126,87 @@ class CaptureSession extends ChangeNotifier {
   }
 
   void changeMode(CaptureMode value, Size viewport) {
-    if (busy || selection != null || _origin != null || mode == value) return;
+    if (busy || scroll != null || _origin != null || mode == value) return;
+    final previous = mode;
+    if (previous != .color) _previousMode = previous;
     mode = value;
     hoveredWindow = null;
     message = null;
-    final currentPointer = pointer;
-    if (currentPointer != null) {
-      hover(active, currentPointer, viewport);
+    if (value == .color) {
+      if (_hover case final hover?) {
+        this.hover(hover.output, hover.position, hover.viewport);
+      } else {
+        nudgeColor(Offset.zero, viewport);
+      }
+      return;
+    }
+    final selectionOutput = _selectionOutput;
+    if (value == .region && selectionOutput != null) {
+      active = selectionOutput;
+      pointer = null;
+      notifyListeners();
+      return;
+    }
+    if (_hover case final hover?) {
+      this.hover(hover.output, hover.position, hover.viewport);
     } else {
       notifyListeners();
     }
+  }
+
+  void toggleColor(Size viewport) =>
+      changeMode(mode == .color ? _previousMode : .color, viewport);
+
+  void cycleMode(Size viewport) => changeMode(
+    CaptureMode.values[(mode.index + 1) % CaptureMode.values.length],
+    viewport,
+  );
+
+  void cycleColorFormat() {
+    const formats = <ColorFormat>[.hex, .rgb, .hsl, .oklch];
+    colorFormat = formats[(formats.indexOf(colorFormat) + 1) % formats.length];
+    notifyListeners();
+  }
+
+  void zoomColor(bool increase) {
+    const levels = [4, 6, 8, 12, 16, 24, 32];
+    zoom =
+        levels[(levels.indexOf(zoom) + (increase ? 1 : -1)).clamp(
+          0,
+          levels.length - 1,
+        )];
+    notifyListeners();
+  }
+
+  void nudgeColor(Offset delta, Size viewport) {
+    final pixel = active.clampPixel(
+      (colorPixel ?? active.size.center(Offset.zero)) + delta,
+    );
+    colorPixel = pixel;
+    _colorViewport = viewport;
+    pointer = active.logicalAt(pixel + const Offset(.5, .5), viewport);
+    notifyListeners();
+  }
+
+  Offset get colorPosition {
+    final size = active.monitor.bounds.size;
+    final viewport = _colorViewport ?? size;
+    final local = pointer ?? viewport.center(Offset.zero);
+    return Offset(
+      (local.dx * size.width / viewport.width).floorToDouble(),
+      (local.dy * size.height / viewport.height).floorToDouble(),
+    );
+  }
+
+  PickedColor get colorSample {
+    final pixel =
+        colorPixel ?? active.clampPixel(active.size.center(Offset.zero));
+    return PickedColor(
+      color: active.colorAt(pixel),
+      output: active.name,
+      position: colorPosition,
+      time: DateTime.now(),
+    );
   }
 
   void startDrag(
@@ -146,8 +257,7 @@ class CaptureSession extends ChangeNotifier {
       return null;
     }
     if (rect == null) return request;
-    selection = pixelRect(scaleRect(rect, viewport, output.size), output.size);
-    notifyListeners();
+    setSelection(scaleRect(rect, viewport, output.size));
     return null;
   }
 
@@ -158,13 +268,15 @@ class CaptureSession extends ChangeNotifier {
   }
 
   void setSelection(Rect value) {
-    selection = pixelRect(value, active.size);
+    _selection = pixelRect(value, active.size);
+    _selectionOutput = active;
     message = null;
     notifyListeners();
   }
 
   void clearSelection() {
-    selection = null;
+    _selection = null;
+    _selectionOutput = null;
     message = null;
     notifyListeners();
   }

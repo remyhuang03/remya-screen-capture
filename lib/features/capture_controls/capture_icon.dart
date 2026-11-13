@@ -40,6 +40,9 @@ enum CaptureSymbol {
   fitScreen('fit-screen'),
   save('save'),
   palette('palette'),
+  colorize('colorize'),
+  history('history'),
+  tune('tune'),
   bold('bold'),
   italic('italic'),
   underline('underline'),
@@ -68,6 +71,10 @@ class CaptureIcon extends StatelessWidget {
       _size = 20;
 
   const CaptureIcon.segmentRegion({super.key}) : _symbol = .region, _size = 18;
+
+  const CaptureIcon.segmentWindow({super.key}) : _symbol = .window, _size = 18;
+
+  const CaptureIcon.segmentColor({super.key}) : _symbol = .colorize, _size = 18;
 
   const CaptureIcon.swatchAdd({super.key}) : _symbol = .add, _size = 16;
 

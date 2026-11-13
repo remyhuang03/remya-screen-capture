@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_buttons.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_labels.dart';
+import 'package:remya_screen_capture/features/color_picker/color_data.dart';
 import 'package:remya_screen_capture/features/screenshot/capture_geometry.dart';
 import 'package:remya_screen_capture/features/screenshot/capture_overlay.dart';
 import 'package:remya_screen_capture/features/screenshot/capture_session.dart';
@@ -120,36 +121,49 @@ void main() {
       final session = CaptureSession([output], [window('a')], output);
       addTearDown(session.dispose);
       final requests = <CaptureRequest>[];
-      var pickerRequests = 0;
+      final picks = <(PickedColor, bool)>[];
+      output.pixels
+        ..setUint32((300 * 1440 + 361) * 4, 0x123456ff)
+        ..setUint32((300 * 1440 + 371) * 4, 0x4f378bff);
       await tester.pumpWidget(
         MaterialApp(
           home: CaptureOverlay(
             session: session,
             output: output,
             onCapture: requests.add,
-            onPickColor: () => pickerRequests++,
+            onPickColor: (sample, {required keepPicking}) =>
+                picks.add((sample, keepPicking)),
+            onColorHistory: () {},
             onScroll: () {},
             onBack: session.clearSelection,
             onDone: () {},
           ),
         ),
       );
+      expect(find.widgetWithText(CaptureKeycap, 'C'), findsOneWidget);
+      expect(find.text('Pick color'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
-      expect(pickerRequests, 1);
+      expect(session.mode, CaptureMode.color);
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(CaptureKeycap, 'C'), findsOneWidget);
+      expect(find.text('Back to capture'), findsOneWidget);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      expect(pickerRequests, 1);
+      expect(session.mode, CaptureMode.color);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      expect(session.mode, CaptureMode.region);
+      await tester.pump();
 
       final toolbarHint = find.text('Switch');
       final before = tester.getCenter(toolbarHint);
       await tester.dragFrom(
         before,
-        const Offset(60, 48),
+        const Offset(20, 48),
         kind: PointerDeviceKind.mouse,
       );
       await tester.pump();
-      expect(tester.getCenter(toolbarHint), before + const Offset(60, 48));
+      expect(tester.getCenter(toolbarHint), before + const Offset(20, 48));
       expect(requests, isEmpty);
 
       await tester.tapAt(const Offset(510, 330));
@@ -167,7 +181,7 @@ void main() {
       expect(toolbarHint, findsNothing);
       await mouse.cancel();
       await tester.pump();
-      expect(tester.getCenter(toolbarHint), before + const Offset(60, 48));
+      expect(tester.getCenter(toolbarHint), before + const Offset(20, 48));
 
       final selection = await tester.startGesture(
         const Offset(240, 200),
@@ -178,6 +192,8 @@ void main() {
       await selection.up();
       await tester.pump();
       expect(find.text('Edit'), findsOneWidget);
+      expect(find.widgetWithText(CaptureKeycap, 'C'), findsOneWidget);
+      expect(find.text('Pick color'), findsOneWidget);
       expect(session.selection, const Rect.fromLTRB(360, 300, 660, 540));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -200,6 +216,33 @@ void main() {
         tester.getRect(hintSurface).bottom,
         lessThan(tester.getRect(badge).top),
       );
+      final region = session.selection;
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.pumpAndSettle();
+      await tester.sendEventToBinding(
+        const PointerHoverEvent(
+          device: 50,
+          kind: PointerDeviceKind.mouse,
+          position: Offset(240, 200),
+        ),
+      );
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(picks.single.$1.color, const Color(0xff123456));
+      expect(picks.single.$1.position, const Offset(241, 200));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.tapAt(const Offset(247.5, 200));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      expect(picks.last.$1.color, const Color(0xff4f378b));
+      expect(picks.last.$2, isTrue);
+      expect(requests, hasLength(2));
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      expect(session.colorFormat, ColorFormat.rgb);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      expect(session.mode, CaptureMode.region);
+      expect(session.selection, region);
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
   );

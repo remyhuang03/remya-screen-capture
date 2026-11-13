@@ -562,46 +562,6 @@ class RecordingRun {
   }
 }
 
-class RecordingShader {
-  RecordingShader._(this._hex);
-
-  String _hex;
-
-  static Future<RecordingShader> suspend() async {
-    final result = await _checked(Process.start, 'hyprctl', [
-      'repl',
-      '''
-local shader = hl.get_config('decoration.screen_shader')
-if type(shader) ~= 'string' then return 'unknown shader' end
-if shader ~= '' then
-  hl.config({decoration = {screen_shader = '[[EMPTY]]'}})
-end
-return 'shader:' .. (shader:gsub('.', function(c) return string.format('%02x', c:byte()) end))
-''',
-    ]);
-    final response = RegExp(r'^shader:((?:[a-f0-9]{2})*)$')
-        .firstMatch(result.stdout.trim());
-    if (response == null) {
-      throw StateError('Could not read the current screen shader.');
-    }
-    return RecordingShader._(response[1]!);
-  }
-
-  Future<void> restore() async {
-    if (_hex.isEmpty) return;
-    await _checked(Process.start, 'hyprctl', [
-      'eval',
-      '''
-if hl.get_config('decoration.screen_shader') == '' then
-  local shader = ('$_hex'):gsub('..', function(pair) return string.char(tonumber(pair, 16)) end)
-  hl.config({decoration = {screen_shader = shader}})
-end
-''',
-    ]);
-    _hex = '';
-  }
-}
-
 typedef _CommandResult = ({int exitCode, String stdout, String stderr});
 
 Future<_CommandResult> _command(

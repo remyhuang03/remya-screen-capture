@@ -7,3 +7,8 @@ Icon=top.remya.screen_capture
 Terminal=false
 Categories=Utility;Graphics;
 StartupWMClass=top.remya.screen_capture
+Actions=PickColor;
+
+[Desktop Action PickColor]
+Name=Pick color
+Exec=remya_screen_capture --color-picker

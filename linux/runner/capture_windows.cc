@@ -191,7 +191,7 @@ class CaptureWindows {
   }
 
  private:
-  enum class Role { overlay, result, recording_setup, recording_hud, editor };
+  enum class Role { overlay, result, color_panel, recording_setup, recording_hud, editor };
 
   struct Window {
     CaptureWindows* host;
@@ -312,9 +312,11 @@ class CaptureWindows {
     const bool editor = g_str_equal(role_name, "editor");
     const bool overlay = g_str_equal(role_name, "overlay");
     const bool result = g_str_equal(role_name, "result");
+    const bool color_panel = g_str_equal(role_name, "colorPanel");
     const bool recording_setup = g_str_equal(role_name, "recordingSetup");
     const bool recording_hud = g_str_equal(role_name, "recordingHud");
-    if (!editor && !overlay && !result && !recording_setup && !recording_hud) {
+    if (!editor && !overlay && !result && !color_panel && !recording_setup &&
+        !recording_hud) {
       error(call, "bad-arguments", "Unknown capture window role.");
       return;
     }
@@ -332,6 +334,7 @@ class CaptureWindows {
     }
     const auto role = editor            ? Role::editor
                       : overlay         ? Role::overlay
+                      : color_panel     ? Role::color_panel
                       : recording_setup ? Role::recording_setup
                       : recording_hud   ? Role::recording_hud
                                         : Role::result;
@@ -371,6 +374,7 @@ class CaptureWindows {
     } else {
       gtk_layer_init_for_window(window);
       const char* layer_namespace = overlay ? APPLICATION_ID "/overlay"
+          : color_panel ? APPLICATION_ID "/color-panel"
           : recording_setup ? APPLICATION_ID "/recording-setup"
           : recording_hud ? APPLICATION_ID "/recording-hud"
                           : APPLICATION_ID "/result";
@@ -389,6 +393,10 @@ class CaptureWindows {
       if (visual != nullptr) gtk_widget_set_visual(widget, visual);
       const GdkRGBA transparent = {0, 0, 0, 0};
       fl_view_set_background_color(view, &transparent);
+      if (color_panel) {
+        g_signal_connect(widget, "focus-out-event", G_CALLBACK(focus_lost),
+                         state.get());
+      }
     }
 
     g_signal_connect(widget, "destroy", G_CALLBACK(window_destroyed),
@@ -487,6 +495,14 @@ class CaptureWindows {
     const auto& window = *static_cast<Window*>(data);
     window.host->emit("closeRequested", window.id);
     return TRUE;
+  }
+
+  static gboolean focus_lost(GtkWidget* widget, GdkEventFocus*, gpointer data) {
+    const auto& window = *static_cast<Window*>(data);
+    if (window.active && gtk_widget_get_mapped(widget)) {
+      window.host->emit("focusLost", window.id);
+    }
+    return FALSE;
   }
 
   static void window_destroyed(GtkWidget*, gpointer data) {
