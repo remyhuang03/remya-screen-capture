@@ -309,7 +309,9 @@ class _RecordingHostState extends State<RecordingHost>
     try {
       await options.save();
       if (cancel.isCompleted) return;
-      _shader = await HyprlandCaptureRendering.suspend();
+      _shader = await HyprlandCaptureRendering.suspend(
+        hardwareCursor: !options.cursor,
+      );
       for (var value = 3; value > 0 && !cancel.isCompleted; value--) {
         setState(() => _countdown = value);
         await Future.any([

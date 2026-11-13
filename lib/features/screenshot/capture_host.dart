@@ -248,7 +248,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   }
 
   Future<List<Uint8List>> _freeze(List<CaptureMonitor> monitors) async {
-    final shader = await HyprlandCaptureRendering.suspend(hideCursor: true);
+    final shader = await HyprlandCaptureRendering.suspend(hardwareCursor: true);
     try {
       return await Future.wait(
         monitors.map((monitor) => rust.captureOutput(name: monitor.name)),
@@ -558,8 +558,10 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     session.setBusy(true);
     final _ScrollRun run;
     try {
-      // Live frames must match what the user sees, without the screen shader.
-      run = _ScrollRun(await HyprlandCaptureRendering.suspend());
+      // Live frames must match the content: no screen shader, no cursor.
+      run = _ScrollRun(
+        await HyprlandCaptureRendering.suspend(hardwareCursor: true),
+      );
     } catch (error) {
       if (_current(revision)) session.setBusy(false, error: _message(error));
       return;

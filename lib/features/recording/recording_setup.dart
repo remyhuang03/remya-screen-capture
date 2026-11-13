@@ -310,7 +310,7 @@ class _SetupControls extends StatelessWidget {
       ),
       if (!options.cursor)
         const CaptureTooltipLabel(
-          'A software cursor drawn by the compositor can still appear.',
+          'A display that cannot use a hardware cursor can still show it.',
         ),
       if (message case final message?)
         Semantics(
