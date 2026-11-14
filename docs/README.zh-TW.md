@@ -36,10 +36,21 @@
 
 ### 透過 AUR 安裝
 
-使用你常用的 AUR 助手安裝 `remya-screen-capture`：
+安裝 [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` 以使用共用主題與偏好設定。AUR 提供原始碼套件 `remya-screen-capture` 和預先編譯的 `remya-screen-capture-bin`，兩者皆依賴 `remya-core`。
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
+```
+
+### 從發行封存檔安裝
+
+手動安裝時，請先安裝 Core，再從 [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases) 下載 x86_64 封存檔與 `SHA256SUMS`。
+
+```bash
+sha256sum -c SHA256SUMS
+tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.2.0-linux-x86_64
+python tool/install.py
 ```
 
 ### Hyprland 快捷鍵設定
@@ -98,7 +109,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Rust**：`2024` edition，透過根目錄 `rust-toolchain.toml` 以 Cargo workspace 管理。
 - **FFI**：`flutter_rust_bridge` `2.13.0`，Linux 建置會打包 Rust 截圖函式庫。
 - **錄影與影片**：使用系統 GPU Screen Recorder 擷取畫面，libmpv 進行預覽，FFmpeg 負責匯出。
-- **設定整合**：公開套件 `remya_settings_client`，預留供未來整合使用。
+- 共用主題、錄影與取色偏好透過 Remya Core 的 `remya_client` 和 `remya_ui` 提供。執行 `remya_screen_capture --settings` 開啟設定視窗。
 - **目錄結構**：
   - `lib/main.dart` 與 `lib/app.dart`：應用程式啟動與主題設定。
   - `lib/features/`：截圖 UI、影像編輯器及可重複使用的擷取控制項。
@@ -120,7 +131,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- 相鄰目錄需包含提供 `packages/remya_settings_client` 的 `../remya-settings` 存放庫檢出
+- 這個版本需要同層的 `../remya-core` 儲存庫切換至 `v0.1.0`，以提供 `packages/remya_client` 和 `packages/remya_ui`。
 
 ```bash
 fvm install

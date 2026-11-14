@@ -36,10 +36,21 @@ Eine moderne, elegante Oberfläche auf Basis von **Material Design 3 Expressive*
 
 ### Installation über das AUR
 
-Installieren Sie `remya-screen-capture` mit Ihrem bevorzugten AUR-Helfer:
+Installieren Sie [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` für gemeinsame Designs und Einstellungen. Im AUR stehen das Quellpaket `remya-screen-capture` und das Binärpaket `remya-screen-capture-bin` zur Auswahl. Beide hängen von `remya-core` ab.
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
+```
+
+### Installation aus einem Release-Archiv
+
+Installieren Sie bei manueller Installation zuerst Core. Laden Sie dann das x86_64-Archiv und `SHA256SUMS` von [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases) herunter.
+
+```bash
+sha256sum -c SHA256SUMS
+tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.2.0-linux-x86_64
+python tool/install.py
 ```
 
 ### Hyprland-Tastenkürzel
@@ -98,7 +109,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Rust**: Edition `2024`, verwaltet als Cargo-Workspace über `rust-toolchain.toml`.
 - **FFI**: `flutter_rust_bridge` `2.13.0`. Der Linux-Build bündelt die Rust-Screenshot-Bibliothek.
 - **Aufnahme & Video**: Systemweiter GPU Screen Recorder für die Aufnahme, libmpv für die Vorschau und FFmpeg für den Export.
-- **Einstellungsintegration**: Öffentliches Paket `remya_settings_client`, reserviert für künftige Integration.
+- Gemeinsame Designs sowie Einstellungen für Aufnahmen und Farbauswahl verwenden `remya_client` und `remya_ui` aus Remya Core. Öffnen Sie das Einstellungsfenster mit `remya_screen_capture --settings`.
 - **Struktur**:
   - `lib/main.dart` und `lib/app.dart`: Startvorgang und Design.
   - `lib/features/`: Screenshot-Oberfläche, Bildeditor und wiederverwendbare Aufnahmesteuerungen.
@@ -120,7 +131,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- Ein benachbarter Checkout `../remya-settings` mit `packages/remya_settings_client`
+- Ein benachbarter Checkout `../remya-core` auf `v0.1.0` mit `packages/remya_client` und `packages/remya_ui`.
 
 ```bash
 fvm install

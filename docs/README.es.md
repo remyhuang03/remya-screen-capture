@@ -36,10 +36,21 @@ Una interfaz moderna y elegante creada con **Material Design 3 Expressive**, que
 
 ### Instalar desde AUR
 
-Instala `remya-screen-capture` con tu asistente de AUR habitual:
+Instala [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` para usar los temas y las preferencias compartidas. AUR ofrece el paquete fuente `remya-screen-capture` y el binario `remya-screen-capture-bin`. Ambos dependen de `remya-core`.
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
+```
+
+### Instalar desde un archivo de la versión
+
+Para instalar manualmente, instala primero Core. Descarga el archivo x86_64 y `SHA256SUMS` desde [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases).
+
+```bash
+sha256sum -c SHA256SUMS
+tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.2.0-linux-x86_64
+python tool/install.py
 ```
 
 ### Atajos de Hyprland
@@ -98,7 +109,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Rust**: edición `2024`, gestionado como espacio de trabajo Cargo con el archivo `rust-toolchain.toml` en la raíz.
 - **FFI**: `flutter_rust_bridge` `2.13.0`. La compilación de Linux incluye la biblioteca de captura en Rust.
 - **Grabación y vídeo**: GPU Screen Recorder del sistema para captura, libmpv para vista previa y FFmpeg para exportación.
-- **Integración de ajustes**: paquete público `remya_settings_client`, reservado para integración futura.
+- Los temas compartidos y las preferencias de grabación y selección de color usan `remya_client` y `remya_ui` de Remya Core. Abre la ventana de ajustes con `remya_screen_capture --settings`.
 - **Estructura**:
   - `lib/main.dart` y `lib/app.dart`: inicio y tema.
   - `lib/features/`: interfaz de captura, editor de imágenes y controles reutilizables.
@@ -120,7 +131,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- Un repositorio hermano `../remya-settings` que proporcione `packages/remya_settings_client`
+- Una copia de `../remya-core` en `v0.1.0` junto al repositorio, con `packages/remya_client` y `packages/remya_ui`.
 
 ```bash
 fvm install

@@ -36,10 +36,21 @@ A modern, refined interface built with **Material Design 3 Expressive**, combini
 
 ### Install via AUR
 
-Install `remya-screen-capture` using your preferred AUR helper:
+Install [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` for shared themes and preferences. Choose the AUR source package `remya-screen-capture` or the prebuilt `remya-screen-capture-bin`. Both depend on `remya-core`.
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
+```
+
+### Install from a release archive
+
+For a manual install, install Core first. Download the x86_64 archive and `SHA256SUMS` from [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases).
+
+```bash
+sha256sum -c SHA256SUMS
+tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.2.0-linux-x86_64
+python tool/install.py
 ```
 
 ### Hyprland Keybindings
@@ -98,7 +109,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Rust**: `2024` edition, managed as a Cargo workspace with the root `rust-toolchain.toml`.
 - **FFI**: `flutter_rust_bridge` `2.13.0`. The Linux build bundles the Rust screenshot library.
 - **Recording and video**: System GPU Screen Recorder for capture, libmpv for preview, and FFmpeg for export.
-- **Settings integration**: Public `remya_settings_client` package, reserved for future integration.
+- Shared themes and recording and color picker preferences use `remya_client` and `remya_ui` from Remya Core. Open the settings window with `remya_screen_capture --settings`.
 - **Structure**:
   - `lib/main.dart` and `lib/app.dart`: Startup and theme.
   - `lib/features/`: Screenshot UI, image editor, and reusable capture controls.
@@ -120,7 +131,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- A sibling `../remya-settings` checkout providing `packages/remya_settings_client`
+- A sibling `../remya-core` checkout at `v0.1.0` for this release, providing `packages/remya_client` and `packages/remya_ui`.
 
 ```bash
 fvm install

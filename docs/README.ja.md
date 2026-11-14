@@ -36,10 +36,21 @@
 
 ### AUR からインストール
 
-お好みの AUR ヘルパーで `remya-screen-capture` をインストールします：
+共有テーマと設定を使うには [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` をインストールしてください。AUR ではソース版 `remya-screen-capture` とバイナリ版 `remya-screen-capture-bin` を選べます。どちらも `remya-core` に依存します。
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
+```
+
+### リリースアーカイブからインストール
+
+手動でインストールする場合は、先に Core をインストールし、[GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases) から x86_64 アーカイブと `SHA256SUMS` をダウンロードしてください。
+
+```bash
+sha256sum -c SHA256SUMS
+tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.2.0-linux-x86_64
+python tool/install.py
 ```
 
 ### Hyprland ショートカット設定
@@ -98,7 +109,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Rust**：`2024` エディション、ルートの `rust-toolchain.toml` とともに Cargo workspace として管理。
 - **FFI**：`flutter_rust_bridge` `2.13.0`。Linux ビルドには Rust 製スクリーンショットライブラリを同梱。
 - **録画と動画**：キャプチャにシステムの GPU Screen Recorder、プレビューに libmpv、書き出しに FFmpeg を使用。
-- **設定連携**：公開パッケージ `remya_settings_client`（将来の連携向けに予約）。
+- 共有テーマ、録画設定、カラーピッカー設定に Remya Core の `remya_client` と `remya_ui` を使用します。`remya_screen_capture --settings` で設定ウィンドウを開きます。
 - **構成**：
   - `lib/main.dart` / `lib/app.dart`: 起動処理とテーマ。
   - `lib/features/`: スクリーンショット UI、画像エディタ、再利用可能なキャプチャコントロール。
@@ -120,7 +131,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- `packages/remya_settings_client` を提供する隣接チェックアウト `../remya-settings`
+- `packages/remya_client` と `packages/remya_ui` を提供する隣接チェックアウト `../remya-core` の `v0.1.0`。
 
 ```bash
 fvm install
