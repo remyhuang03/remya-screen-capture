@@ -41,29 +41,33 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  bool switchValue(WidgetTester tester, String title) => tester
-      .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title))
-      .value;
+  Finder switchOf(String id) => find.descendant(
+    of: find.byKey(ValueKey(id)),
+    matching: find.byType(Switch),
+  );
+
+  bool switchValue(WidgetTester tester, String title) =>
+      tester.widget<Switch>(switchOf(title)).value;
 
   testWidgets('recording keeps the last valid value on errors and follows '
       'external changes', (tester) async {
     preferences.unavailable = true;
     await pump(tester, 'recording');
-    expect(find.byIcon(Icons.error_rounded), findsOneWidget);
-    expect(find.byType(SwitchListTile), findsNothing);
+    expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
+    expect(find.byType(Switch), findsNothing);
 
     preferences.unavailable = false;
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.error_rounded), findsNothing);
+    expect(find.byIcon(Icons.error_outline_rounded), findsNothing);
 
-    await tester.tap(find.text('Microphone'));
+    await tester.tap(switchOf('Microphone'));
     await tester.pumpAndSettle();
     expect(preferences.values['recording']['microphone'], isTrue);
     expect(switchValue(tester, 'Microphone'), isTrue);
 
     preferences.unavailable = true;
-    await tester.tap(find.text('Cursor'));
+    await tester.tap(switchOf('Cursor'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Core unavailable'), findsOneWidget);
     expect(switchValue(tester, 'Cursor'), isTrue);
@@ -83,15 +87,7 @@ void main() {
     await pump(tester, 'color-picker');
     expect(find.text('HEX case'), findsOneWidget);
 
-    final hex = find.widgetWithText(CheckboxListTile, 'HEX');
-    await tester.scrollUntilVisible(
-      hex,
-      200,
-      scrollable: find.descendant(
-        of: find.byKey(const PageStorageKey('color-picker')),
-        matching: find.byType(Scrollable),
-      ),
-    );
+    final hex = switchOf('format-hex');
     await tester.ensureVisible(hex);
     await tester.pumpAndSettle();
     await tester.tap(hex);

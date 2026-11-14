@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:convert';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -56,6 +57,41 @@ CaptureWindow window(
 });
 
 void main() {
+  test(
+    'launch metadata retains mixed scale and rotated monitor geometry',
+    () async {
+      final data = {
+        'id': 1,
+        'name': 'DP-1',
+        'focused': true,
+        'x': -960,
+        'y': 30,
+        'width': 1050,
+        'height': 1440,
+        'scale': 1.5,
+        'transform': 1,
+        'activeWorkspace': {'id': 1},
+        'specialWorkspace': {},
+        'mirrorOf': 'none',
+      };
+      final outputs = await readMonitors(
+        snapshot: jsonEncode([
+          data,
+          {...data, 'name': 'disabled', 'disabled': true},
+          {...data, 'name': 'mirror', 'mirrorOf': 'DP-1'},
+        ]),
+      );
+      expect(outputs.single.name, 'DP-1');
+      expect(outputs.single.bounds, const Rect.fromLTWH(-960, 30, 960, 700));
+      expect(await readWindows(snapshot: '[]'), isEmpty);
+      expect(
+        await readCursor(snapshot: '{"x":-30,"y":40}'),
+        const Offset(-30, 40),
+      );
+      expect(await readCursor(snapshot: 'invalid'), isNull);
+    },
+  );
+
   test('window hit testing respects workspace, layer and stacking order', () {
     final output = monitor();
     final tiled = window('a');
@@ -236,6 +272,12 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       expect(picks.last.$1.color, const Color(0xff4f378b));
       expect(picks.last.$2, isTrue);
+      await tester.pumpAndSettle();
+      expect(find.text('#4F378B'), findsOneWidget);
+      session.setUppercaseHex(false);
+      await tester.pumpAndSettle();
+      expect(find.text('#4f378b'), findsOneWidget);
+      expect(find.text('#4F378B'), findsNothing);
       expect(requests, hasLength(2));
       await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
       expect(session.colorFormat, ColorFormat.rgb);

@@ -81,3 +81,21 @@ pub enum ScrollStatus {
     /// The scrolled content could not be aligned with the capture.
     NoMatch,
 }
+
+/// Consumes the launch snapshot once. Unavailable or failed prefetches use the
+/// normal Dart capture path, including shader/software-cursor suspension.
+pub fn take_startup_capture() -> Option<StartupCapture> {
+    crate::startup::take()
+}
+
+pub struct StartupCapture {
+    pub monitors: String,
+    pub windows: String,
+    pub cursor: String,
+    pub frames: Vec<StartupFrame>,
+}
+
+pub struct StartupFrame {
+    pub name: String,
+    pub png: Vec<u8>,
+}

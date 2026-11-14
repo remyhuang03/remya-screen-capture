@@ -54,6 +54,9 @@ abstract class ScreenshotRustLibApiImplPlatform
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  StartupCapture dco_decode_box_autoadd_startup_capture(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -63,10 +66,22 @@ abstract class ScreenshotRustLibApiImplPlatform
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<StartupFrame> dco_decode_list_startup_frame(dynamic raw);
+
+  @protected
+  StartupCapture? dco_decode_opt_box_autoadd_startup_capture(dynamic raw);
+
+  @protected
   ScrollStatus dco_decode_scroll_status(dynamic raw);
 
   @protected
   ScrollUpdate dco_decode_scroll_update(dynamic raw);
+
+  @protected
+  StartupCapture dco_decode_startup_capture(dynamic raw);
+
+  @protected
+  StartupFrame dco_decode_startup_frame(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -108,6 +123,11 @@ abstract class ScreenshotRustLibApiImplPlatform
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  StartupCapture sse_decode_box_autoadd_startup_capture(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -117,10 +137,26 @@ abstract class ScreenshotRustLibApiImplPlatform
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<StartupFrame> sse_decode_list_startup_frame(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  StartupCapture? sse_decode_opt_box_autoadd_startup_capture(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ScrollStatus sse_decode_scroll_status(SseDeserializer deserializer);
 
   @protected
   ScrollUpdate sse_decode_scroll_update(SseDeserializer deserializer);
+
+  @protected
+  StartupCapture sse_decode_startup_capture(SseDeserializer deserializer);
+
+  @protected
+  StartupFrame sse_decode_startup_frame(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -168,6 +204,12 @@ abstract class ScreenshotRustLibApiImplPlatform
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_startup_capture(
+    StartupCapture self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -180,10 +222,31 @@ abstract class ScreenshotRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_startup_frame(
+    List<StartupFrame> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_startup_capture(
+    StartupCapture? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_scroll_status(ScrollStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_scroll_update(ScrollUpdate self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_startup_capture(
+    StartupCapture self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_startup_frame(StartupFrame self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

@@ -151,13 +151,12 @@ class _RecordingHostState extends State<RecordingHost>
         if (_phase == .closing) return;
         setState(() => _editor = null);
       }
-      try {
-        _options = await RecordingOptions.read();
-      } catch (error) {
-        _message = 'Could not read recording settings. ${_describe(error)}';
-      }
-      final outputs = await captureWindows.invokeListMethod<String>('outputs');
-      final monitors = (await readMonitors())
+      unawaited(_readOptions());
+      final (outputs, allMonitors) = await (
+        captureWindows.invokeListMethod<String>('outputs'),
+        readMonitors(),
+      ).wait;
+      final monitors = allMonitors
           .where((monitor) => outputs?.contains(monitor.name) ?? false)
           .toList();
       if (monitors.isEmpty) {
@@ -189,6 +188,22 @@ class _RecordingHostState extends State<RecordingHost>
       if (_phase != .closing) {
         await _showError('Could not prepare recording. ${_describe(error)}');
       }
+    }
+  }
+
+  Future<void> _readOptions() async {
+    final previous = _options;
+    try {
+      final options = await RecordingOptions.read();
+      if (!mounted || _options != previous) return;
+      if (_phase == .opening || _phase == .selecting) {
+        setState(() => _options = options);
+      }
+    } catch (error) {
+      if (!mounted || (_phase != .opening && _phase != .selecting)) return;
+      setState(() {
+        _message = 'Could not read recording settings. ${_describe(error)}';
+      });
     }
   }
 

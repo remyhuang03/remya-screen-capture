@@ -76,6 +76,14 @@ set_target_properties(${BINARY_NAME}
 set(MEDIA_KIT_LIBS_AVAILABLE TRUE)
 include(flutter/generated_plugins.cmake)
 
+# Editors load plugins on demand; linking them here loads libmpv before main.
+get_target_property(RUNNER_LIBRARIES ${BINARY_NAME} LINK_LIBRARIES)
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  list(REMOVE_ITEM RUNNER_LIBRARIES ${plugin}_plugin)
+  add_dependencies(${BINARY_NAME} ${plugin}_plugin)
+endforeach()
+set_property(TARGET ${BINARY_NAME} PROPERTY LINK_LIBRARIES "${RUNNER_LIBRARIES}")
+
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
 # directory.

@@ -3,6 +3,7 @@ project(runner LANGUAGES C CXX)
 
 pkg_check_modules(LAYER_SHELL REQUIRED IMPORTED_TARGET gtk-layer-shell-0>=0.6)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
+pkg_check_modules(GMODULE REQUIRED IMPORTED_TARGET gmodule-2.0)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
 find_program(WAYLAND_SCANNER wayland-scanner)
 if(NOT WAYLAND_SCANNER OR NOT WAYLAND_PROTOCOLS_DIR)
@@ -30,7 +31,7 @@ add_executable(${BINARY_NAME}
   "capture_windows.cc"
   "${XDG_OUTPUT_HEADER}"
   "${XDG_OUTPUT_SOURCE}"
-  "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
+  "capture_plugins.cc"
 )
 
 # Apply the standard set of build settings. This can be removed for applications
@@ -44,5 +45,6 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::LAYER_SHELL PkgConfig::WAYLAND)
+target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GMODULE)
 
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")

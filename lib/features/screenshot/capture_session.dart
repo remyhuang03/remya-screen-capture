@@ -77,7 +77,7 @@ class CaptureSession extends ChangeNotifier {
 
   final List<FrozenOutput> outputs;
   final List<CaptureWindow> windows;
-  final bool uppercaseHex;
+  bool uppercaseHex;
   FrozenOutput active;
   CaptureMode mode;
   CaptureMode _previousMode = .region;
@@ -99,6 +99,12 @@ class CaptureSession extends ChangeNotifier {
   Rect? draft;
 
   Rect? get selection => mode == .region ? _selection : null;
+
+  void setUppercaseHex(bool value) {
+    if (uppercaseHex == value) return;
+    uppercaseHex = value;
+    notifyListeners();
+  }
 
   void hover(FrozenOutput output, Offset position, Size viewport) {
     if (_origin != null || scroll != null) return;
