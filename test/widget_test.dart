@@ -12,6 +12,18 @@ import 'package:remya_screen_capture/main.dart';
 void main() {
   const preview = RemyaScreenCaptureApp(home: CaptureControlsPreview());
 
+  test('capture themes share work across views and follow Core updates', () {
+    final previous = themeController.theme;
+    addTearDown(() => themeController.theme = previous);
+    final dark = remyaCaptureTheme(.dark);
+    expect(identical(remyaCaptureTheme(.dark), dark), isTrue);
+    expect(remyaCaptureTheme(.light).brightness, Brightness.light);
+    themeController.theme = .new(seedColor: const Color(0xff008800));
+    final updated = remyaCaptureTheme(.dark);
+    expect(updated.colorScheme.primary, isNot(dark.colorScheme.primary));
+    expect(updated.textTheme.bodyMedium?.fontFamily, 'Inter');
+  });
+
   testWidgets('Preview opens and loads every design icon', (tester) async {
     tester.view.physicalSize = const Size(1019, 2300);
     tester.view.devicePixelRatio = 1;

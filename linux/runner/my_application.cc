@@ -2,7 +2,7 @@
 
 #include <clocale>
 
-#include "flutter/generated_plugin_registrant.h"
+#include "capture_plugins.h"
 
 #include "capture_windows.h"
 
@@ -12,6 +12,76 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+// The undecorated settings window's last primary press, for moving it.
+struct SettingsWindow {
+  GtkWindow* window;
+  guint32 press_time = GDK_CURRENT_TIME;
+  int press_x = 0;
+  int press_y = 0;
+};
+
+static void settings_pressed(GtkGestureMultiPress*, int, double, double,
+                             gpointer data) {
+  auto* settings = static_cast<SettingsWindow*>(data);
+  g_autoptr(GdkEvent) event = gtk_get_current_event();
+  double x, y;
+  if (event == nullptr || !gdk_event_get_root_coords(event, &x, &y)) return;
+  settings->press_time = gdk_event_get_time(event);
+  settings->press_x = static_cast<int>(x);
+  settings->press_y = static_cast<int>(y);
+}
+
+static gboolean settings_close(gpointer window) {
+  gtk_window_close(GTK_WINDOW(window));
+  return G_SOURCE_REMOVE;
+}
+
+static void settings_method_call(FlMethodChannel*, FlMethodCall* call,
+                                 gpointer data) {
+  auto* settings = static_cast<SettingsWindow*>(data);
+  const char* method = fl_method_call_get_name(call);
+  if (g_str_equal(method, "beginMove")) {
+    if (settings->press_time != GDK_CURRENT_TIME) {
+      gtk_window_begin_move_drag(settings->window, 1, settings->press_x,
+                                 settings->press_y, settings->press_time);
+      settings->press_time = GDK_CURRENT_TIME;
+    }
+  } else if (g_str_equal(method, "close")) {
+    // Close after replying; closing destroys the engine handling this call.
+    g_idle_add_full(G_PRIORITY_DEFAULT, settings_close,
+                    g_object_ref(settings->window), g_object_unref);
+  } else {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
+// Lets RemyaTitleBar move and close the settings window.
+static void attach_settings_channel(GtkWindow* window, FlView* view) {
+  auto* settings = new SettingsWindow{window};
+  g_object_set_data_full(G_OBJECT(window), "settings-window", settings,
+                         [](gpointer data) {
+                           delete static_cast<SettingsWindow*>(data);
+                         });
+  auto* gesture = gtk_gesture_multi_press_new(GTK_WIDGET(window));
+  g_object_set_data_full(G_OBJECT(window), "move-gesture", gesture,
+                         g_object_unref);
+  gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(gesture),
+                                             GTK_PHASE_CAPTURE);
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture), 1);
+  g_signal_connect(gesture, "pressed", G_CALLBACK(settings_pressed), settings);
+
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  auto* channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      APPLICATION_ID "/settings", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(channel, settings_method_call,
+                                            settings, nullptr);
+  g_object_set_data_full(G_OBJECT(window), "settings-channel", channel,
+                         g_object_unref);
+}
 
 static void my_application_activate(GApplication* application) {
   auto* self = MY_APPLICATION(application);
@@ -24,10 +94,13 @@ static void my_application_activate(GApplication* application) {
         project, self->dart_entrypoint_arguments);
     auto* window = gtk_application_window_new(GTK_APPLICATION(application));
     gtk_window_set_title(GTK_WINDOW(window), "Remya Screen Capture Settings");
-    gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
+    gtk_window_set_default_size(GTK_WINDOW(window), 1280, 720);
+    // RemyaTitleBar replaces the GTK decorations.
+    gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
     auto* view = fl_view_new(project);
-    fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+    register_capture_plugins(FL_PLUGIN_REGISTRY(view));
     gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+    attach_settings_channel(GTK_WINDOW(window), view);
     gtk_widget_show_all(window);
     return;
   }

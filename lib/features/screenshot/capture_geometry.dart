@@ -83,20 +83,30 @@ class CaptureWindow {
   }
 }
 
-Future<List<CaptureMonitor>> readMonitors() async {
-  return (await _hyprlandList('monitors'))
+Future<List<CaptureMonitor>> readMonitors({String? snapshot}) async {
+  return (snapshot == null
+          ? await _hyprlandList('monitors')
+          : (jsonDecode(snapshot) as List).cast<Map<String, dynamic>>())
       .where((data) => data['disabled'] != true && data['mirrorOf'] == 'none')
       .map(CaptureMonitor.new)
       .toList();
 }
 
-Future<List<CaptureWindow>> readWindows() async {
-  return (await _hyprlandList('clients')).map(CaptureWindow.new).toList();
+Future<List<CaptureWindow>> readWindows({String? snapshot}) async {
+  return (snapshot == null
+          ? await _hyprlandList('clients')
+          : (jsonDecode(snapshot) as List).cast<Map<String, dynamic>>())
+      .map(CaptureWindow.new)
+      .toList();
 }
 
-Future<Offset?> readCursor() async {
+Future<Offset?> readCursor({String? snapshot}) async {
   try {
-    final data = await _hyprlandJson('cursorpos') as Map;
+    final data =
+        (snapshot == null
+                ? await _hyprlandJson('cursorpos')
+                : jsonDecode(snapshot))
+            as Map;
     return Offset((data['x'] as num).toDouble(), (data['y'] as num).toDouble());
   } on Exception {
     return null;

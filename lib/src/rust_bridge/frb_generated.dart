@@ -73,7 +73,7 @@ class ScreenshotRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1437182103;
+  int get rustContentHash => 1988455285;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -119,6 +119,8 @@ abstract class ScreenshotRustLibApi extends BaseApi {
     required bool replace,
     required bool unique,
   });
+
+  Future<StartupCapture?> crateApiTakeStartupCapture();
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_ScrollCapture;
@@ -442,6 +444,33 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
     argNames: ["png", "path", "replace", "unique"],
   );
 
+  @override
+  Future<StartupCapture?> crateApiTakeStartupCapture() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_startup_capture,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTakeStartupCaptureConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTakeStartupCaptureConstMeta =>
+      const TaskConstMeta(debugName: "take_startup_capture", argNames: []);
+
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_ScrollCapture => wire
       .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerScrollCapture;
@@ -496,6 +525,12 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
+  StartupCapture dco_decode_box_autoadd_startup_capture(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_startup_capture(raw);
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -511,6 +546,18 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  List<StartupFrame> dco_decode_list_startup_frame(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_startup_frame).toList();
+  }
+
+  @protected
+  StartupCapture? dco_decode_opt_box_autoadd_startup_capture(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_startup_capture(raw);
   }
 
   @protected
@@ -531,6 +578,32 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
       height: dco_decode_u_32(arr[2]),
       preview: dco_decode_list_prim_u_8_strict(arr[3]),
       status: dco_decode_scroll_status(arr[4]),
+    );
+  }
+
+  @protected
+  StartupCapture dco_decode_startup_capture(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return StartupCapture(
+      monitors: dco_decode_String(arr[0]),
+      windows: dco_decode_String(arr[1]),
+      cursor: dco_decode_String(arr[2]),
+      frames: dco_decode_list_startup_frame(arr[3]),
+    );
+  }
+
+  @protected
+  StartupFrame dco_decode_startup_frame(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return StartupFrame(
+      name: dco_decode_String(arr[0]),
+      png: dco_decode_list_prim_u_8_strict(arr[1]),
     );
   }
 
@@ -615,6 +688,14 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
+  StartupCapture sse_decode_box_autoadd_startup_capture(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_startup_capture(deserializer));
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -632,6 +713,33 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  List<StartupFrame> sse_decode_list_startup_frame(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <StartupFrame>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_startup_frame(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  StartupCapture? sse_decode_opt_box_autoadd_startup_capture(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_startup_capture(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -656,6 +764,29 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
       preview: var_preview,
       status: var_status,
     );
+  }
+
+  @protected
+  StartupCapture sse_decode_startup_capture(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_monitors = sse_decode_String(deserializer);
+    var var_windows = sse_decode_String(deserializer);
+    var var_cursor = sse_decode_String(deserializer);
+    var var_frames = sse_decode_list_startup_frame(deserializer);
+    return StartupCapture(
+      monitors: var_monitors,
+      windows: var_windows,
+      cursor: var_cursor,
+      frames: var_frames,
+    );
+  }
+
+  @protected
+  StartupFrame sse_decode_startup_frame(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_png = sse_decode_list_prim_u_8_strict(deserializer);
+    return StartupFrame(name: var_name, png: var_png);
   }
 
   @protected
@@ -742,6 +873,15 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_box_autoadd_startup_capture(
+    StartupCapture self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_startup_capture(self, serializer);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -770,6 +910,31 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_list_startup_frame(
+    List<StartupFrame> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_startup_frame(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_startup_capture(
+    StartupCapture? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_startup_capture(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_scroll_status(ScrollStatus self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
@@ -783,6 +948,25 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
     sse_encode_u_32(self.height, serializer);
     sse_encode_list_prim_u_8_strict(self.preview, serializer);
     sse_encode_scroll_status(self.status, serializer);
+  }
+
+  @protected
+  void sse_encode_startup_capture(
+    StartupCapture self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.monitors, serializer);
+    sse_encode_String(self.windows, serializer);
+    sse_encode_String(self.cursor, serializer);
+    sse_encode_list_startup_frame(self.frames, serializer);
+  }
+
+  @protected
+  void sse_encode_startup_frame(StartupFrame self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_prim_u_8_strict(self.png, serializer);
   }
 
   @protected

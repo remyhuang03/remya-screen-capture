@@ -136,24 +136,35 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         _errorVisible = false;
         await changeCaptureWindow('hide', editor);
       }
-      await _backend;
-      final connected = await captureWindows.invokeListMethod<String>(
-        'outputs',
-      );
-      final monitors = (await readMonitors())
+      unawaited(_readColorPreferences(revision));
+      final (snapshot, connected) = await (
+        _backend
+            .then((_) => rust.takeStartupCapture())
+            .timeout(const Duration(seconds: 3), onTimeout: () => null),
+        captureWindows.invokeListMethod<String>('outputs'),
+      ).wait;
+      final (allMonitors, windows, cursor) = await (
+        readMonitors(snapshot: snapshot?.monitors),
+        readWindows(snapshot: snapshot?.windows),
+        readCursor(snapshot: snapshot?.cursor),
+      ).wait;
+      final monitors = allMonitors
           .where((monitor) => connected?.contains(monitor.name) ?? false)
           .toList();
       if (monitors.isEmpty) {
         throw StateError('No Hyprland output supports the capture overlay.');
       }
-      final windows = await readWindows();
-      try {
-        _colorPreferences = await _colors.readPreferences();
-      } catch (error) {
-        debugPrint('Could not read color picker settings. ${_message(error)}');
-      }
       if (!_current(revision)) return;
-      final freezing = _freezing = _freeze(monitors);
+      final prefetched = {
+        for (final frame in snapshot?.frames ?? <rust.StartupFrame>[])
+          frame.name: frame.png,
+      };
+      final freezing = _freezing =
+          monitors.every((monitor) => prefetched.containsKey(monitor.name))
+          ? Future.value([
+              for (final monitor in monitors) prefetched[monitor.name]!,
+            ])
+          : _freeze(monitors);
       final List<Uint8List> frames;
       try {
         frames = await freezing;
@@ -178,7 +189,6 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           }
         }),
       );
-      final cursor = await readCursor();
       if (!_current(revision)) return;
       final active = frozen.firstWhere(
         (output) => cursor != null && output.monitor.bounds.contains(cursor),
@@ -205,13 +215,23 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       }
       _session = session;
       handedOff = true;
-      for (final output in frozen) {
-        final id = await openCaptureWindow('overlay', output: output.name);
-        if (!_current(revision)) {
-          await changeCaptureWindow('close', id);
-          return;
-        }
-        _overlays[output.name] = id;
+      final ids = await Future.wait([
+        for (final output in frozen)
+          openCaptureWindow('overlay', output: output.name),
+      ]);
+      if (!_current(revision)) {
+        await Future.wait([
+          for (final id in ids) changeCaptureWindow('close', id),
+        ]);
+        return;
+      }
+      for (final (index, output) in frozen.indexed) {
+        _overlays[output.name] = ids[index];
+      }
+      await _configureInput(session);
+      if (!_current(revision)) return;
+      for (final (index, output) in frozen.indexed) {
+        final id = ids[index];
         _setView(
           id,
           CaptureOverlay(
@@ -227,11 +247,11 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           ),
         );
       }
-      await _configureInput(session);
-      for (final id in _overlays.values.toList()) {
-        if (!_current(revision)) return;
-        await changeCaptureWindow('show', id);
-      }
+      if (!_current(revision)) return;
+      await Future.wait([
+        for (final id in _overlays.values.toList())
+          changeCaptureWindow('show', id),
+      ]);
       session.addListener(_syncKeyboard);
     } catch (error) {
       if (!_current(revision)) return;
@@ -244,6 +264,17 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         }
       }
       _initializing = false;
+    }
+  }
+
+  Future<void> _readColorPreferences(int revision) async {
+    try {
+      final preferences = await _colors.readPreferences();
+      if (!_current(revision)) return;
+      _colorPreferences = preferences;
+      _session?.setUppercaseHex(preferences.uppercase);
+    } catch (error) {
+      debugPrint('Could not read color picker settings. ${_message(error)}');
     }
   }
 

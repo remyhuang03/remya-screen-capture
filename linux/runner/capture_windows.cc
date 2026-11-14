@@ -10,7 +10,7 @@
 #include <string>
 #include <utility>
 
-#include "flutter/generated_plugin_registrant.h"
+#include "capture_plugins.h"
 #include "xdg-output-client-protocol.h"
 
 namespace {
@@ -360,7 +360,7 @@ class CaptureWindows {
     if (editor) {
       gtk_window_set_default_size(window, 1280, 800);
       gtk_widget_set_size_request(GTK_WIDGET(view), 480, 340);
-      fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+      register_capture_plugins(FL_PLUGIN_REGISTRY(view));
       auto* gesture = gtk_gesture_multi_press_new(widget);
       g_object_set_data_full(G_OBJECT(widget), "move-gesture", gesture,
                              g_object_unref);

@@ -59,6 +59,11 @@ Future<ScrollCapture> beginScroll({
   height: height,
 );
 
+/// Consumes the launch snapshot once. Unavailable or failed prefetches use the
+/// normal Dart capture path, including shader/software-cursor suspension.
+Future<StartupCapture?> takeStartupCapture() =>
+    ScreenshotRustLib.instance.api.crateApiTakeStartupCapture();
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ScrollCapture>>
 abstract class ScrollCapture implements RustOpaqueInterface {
   Future<Uint8List> finish();
@@ -117,4 +122,50 @@ class ScrollUpdate {
           height == other.height &&
           preview == other.preview &&
           status == other.status;
+}
+
+class StartupCapture {
+  final String monitors;
+  final String windows;
+  final String cursor;
+  final List<StartupFrame> frames;
+
+  const StartupCapture({
+    required this.monitors,
+    required this.windows,
+    required this.cursor,
+    required this.frames,
+  });
+
+  @override
+  int get hashCode =>
+      monitors.hashCode ^ windows.hashCode ^ cursor.hashCode ^ frames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StartupCapture &&
+          runtimeType == other.runtimeType &&
+          monitors == other.monitors &&
+          windows == other.windows &&
+          cursor == other.cursor &&
+          frames == other.frames;
+}
+
+class StartupFrame {
+  final String name;
+  final Uint8List png;
+
+  const StartupFrame({required this.name, required this.png});
+
+  @override
+  int get hashCode => name.hashCode ^ png.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StartupFrame &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          png == other.png;
 }

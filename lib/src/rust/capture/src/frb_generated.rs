@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1437182103;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1988455285;
 
 // Section: executor
 
@@ -426,6 +426,38 @@ fn wire__crate__api__save_png_impl(
         },
     )
 }
+fn wire__crate__api__take_startup_capture_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "take_startup_capture",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>(crate::api::take_startup_capture())?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 
 // Section: related_funcs
 
@@ -497,6 +529,29 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<crate::api::StartupFrame> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::StartupFrame>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Option<crate::api::StartupCapture> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::StartupCapture>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for crate::api::ScrollStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -525,6 +580,34 @@ impl SseDecode for crate::api::ScrollUpdate {
             height: var_height,
             preview: var_preview,
             status: var_status,
+        };
+    }
+}
+
+impl SseDecode for crate::api::StartupCapture {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_monitors = <String>::sse_decode(deserializer);
+        let mut var_windows = <String>::sse_decode(deserializer);
+        let mut var_cursor = <String>::sse_decode(deserializer);
+        let mut var_frames = <Vec<crate::api::StartupFrame>>::sse_decode(deserializer);
+        return crate::api::StartupCapture {
+            monitors: var_monitors,
+            windows: var_windows,
+            cursor: var_cursor,
+            frames: var_frames,
+        };
+    }
+}
+
+impl SseDecode for crate::api::StartupFrame {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_png = <Vec<u8>>::sse_decode(deserializer);
+        return crate::api::StartupFrame {
+            name: var_name,
+            png: var_png,
         };
     }
 }
@@ -573,6 +656,7 @@ fn pde_ffi_dispatcher_primary_impl(
         7 => wire__crate__api__copy_png_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__crop_png_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__save_png_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__take_startup_capture_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -643,6 +727,40 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ScrollUpdate> for crate::api:
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::StartupCapture {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.monitors.into_into_dart().into_dart(),
+            self.windows.into_into_dart().into_dart(),
+            self.cursor.into_into_dart().into_dart(),
+            self.frames.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::StartupCapture {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::StartupCapture> for crate::api::StartupCapture {
+    fn into_into_dart(self) -> crate::api::StartupCapture {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::StartupFrame {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.png.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::StartupFrame {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::StartupFrame> for crate::api::StartupFrame {
+    fn into_into_dart(self) -> crate::api::StartupFrame {
+        self
+    }
+}
 
 impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -700,6 +818,26 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<crate::api::StartupFrame> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::StartupFrame>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::StartupCapture> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::StartupCapture>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::api::ScrollStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -726,6 +864,24 @@ impl SseEncode for crate::api::ScrollUpdate {
         <u32>::sse_encode(self.height, serializer);
         <Vec<u8>>::sse_encode(self.preview, serializer);
         <crate::api::ScrollStatus>::sse_encode(self.status, serializer);
+    }
+}
+
+impl SseEncode for crate::api::StartupCapture {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.monitors, serializer);
+        <String>::sse_encode(self.windows, serializer);
+        <String>::sse_encode(self.cursor, serializer);
+        <Vec<crate::api::StartupFrame>>::sse_encode(self.frames, serializer);
+    }
+}
+
+impl SseEncode for crate::api::StartupFrame {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <Vec<u8>>::sse_encode(self.png, serializer);
     }
 }
 
