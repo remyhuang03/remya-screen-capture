@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:remya_ui/settings_ui.dart';
 
 import '../capture_controls/capture_buttons.dart';
 import '../color_picker/color_data.dart';
@@ -14,11 +15,10 @@ class RecordingSettingsPage extends StatelessWidget {
   Widget build(BuildContext context) => _PreferencePage(
     controller: controller,
     builder: (options, write) => [
-      _Section(
+      SettingsGroup(
         title: 'Recording',
         children: [
           _Switch(
-            icon: Icons.volume_up_rounded,
             title: 'System audio',
             subtitle: 'Record the default output device',
             value: options.systemAudio,
@@ -27,7 +27,6 @@ class RecordingSettingsPage extends StatelessWidget {
                 : (value) => write(options.copyWith(systemAudio: value)),
           ),
           _Switch(
-            icon: Icons.mic_rounded,
             title: 'Microphone',
             subtitle: 'Record the default input device',
             value: options.microphone,
@@ -36,7 +35,6 @@ class RecordingSettingsPage extends StatelessWidget {
                 : (value) => write(options.copyWith(microphone: value)),
           ),
           _Switch(
-            icon: Icons.mouse_rounded,
             title: 'Cursor',
             subtitle: 'Show the pointer in recordings',
             value: options.cursor,
@@ -74,11 +72,10 @@ class ColorPickerSettingsPage extends StatelessWidget {
       );
       final enabled = preferences.formats;
       return [
-        _Section(
+        SettingsGroup(
           title: 'Picking',
           children: [
             _Row(
-              icon: Icons.touch_app_rounded,
               title: 'After picking',
               trailing: CaptureDropdown<ColorPickAction>(
                 label: 'After picking',
@@ -94,7 +91,6 @@ class ColorPickerSettingsPage extends StatelessWidget {
               ),
             ),
             _Row(
-              icon: Icons.content_copy_rounded,
               title: 'Default copy format',
               trailing: CaptureDropdown<ColorFormat>(
                 label: 'Default copy format',
@@ -107,7 +103,6 @@ class ColorPickerSettingsPage extends StatelessWidget {
             ),
             if (enabled.contains(ColorFormat.hex))
               _Row(
-                icon: Icons.text_fields_rounded,
                 title: 'HEX case',
                 trailing: SegmentedButton<bool>(
                   showSelectedIcon: false,
@@ -123,7 +118,7 @@ class ColorPickerSettingsPage extends StatelessWidget {
               ),
           ],
         ),
-        _Section(
+        SettingsGroup(
           title: 'History',
           children: [
             _HistorySize(
@@ -134,7 +129,7 @@ class ColorPickerSettingsPage extends StatelessWidget {
             ),
           ],
         ),
-        _Section(
+        SettingsGroup(
           title: 'Visible formats',
           children: [
             for (final format in [
@@ -176,134 +171,48 @@ class _PreferencePage<T> extends StatelessWidget {
         crossAxisAlignment: .stretch,
         children: [
           if (error != null)
-            _ErrorBanner(
+            SettingsErrorCard(
               message: describePreferenceError(error),
               onRetry: controller.saving ? null : controller.start,
             ),
+          // The window shows the loading bar until the first value arrives.
           if (value != null)
-            ...builder(value, controller.saving ? null : controller.write)
-          else if (error == null)
-            const Padding(
-              padding: .all(48),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            ...builder(value, controller.saving ? null : controller.write),
         ],
       );
     },
   );
 }
 
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const .only(top: 24),
-      child: Material(
-        color: colors.errorContainer,
-        borderRadius: .circular(24),
-        child: Padding(
-          padding: const .fromLTRB(20, 12, 12, 12),
-          child: Row(
-            spacing: 16,
-            children: [
-              Icon(Icons.error_rounded, color: colors.onErrorContainer),
-              Expanded(
-                child: Text(
-                  message,
-                  style: TextStyle(color: colors.onErrorContainer),
-                ),
-              ),
-              TextButton(
-                onPressed: onRetry,
-                style: TextButton.styleFrom(
-                  foregroundColor: colors.onErrorContainer,
-                ),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: .stretch,
-    children: [
-      Padding(
-        padding: const .only(top: 28, bottom: 12),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      ),
-      Material(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: .circular(24),
-        clipBehavior: .antiAlias,
-        child: Column(
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i != 0) const Divider(height: 1, indent: 20, endIndent: 20),
-              children[i],
-            ],
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
 class _Row extends StatelessWidget {
-  const _Row({required this.icon, required this.title, required this.trailing});
+  const _Row({required this.title, required this.trailing});
 
-  final IconData icon;
   final String title;
   final Widget trailing;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: const .symmetric(horizontal: 20, vertical: 4),
-    leading: Icon(icon),
-    title: Text(title),
-    trailing: trailing,
-  );
+  Widget build(BuildContext context) =>
+      SettingRow(id: title, label: SettingLabel(title), control: trailing);
 }
 
 class _Switch extends StatelessWidget {
   const _Switch({
-    required this.icon,
     required this.title,
     required this.subtitle,
     required this.value,
     required this.onChanged,
   });
 
-  final IconData icon;
   final String title;
   final String subtitle;
   final bool value;
   final ValueChanged<bool>? onChanged;
 
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    contentPadding: const .symmetric(horizontal: 20, vertical: 4),
-    secondary: Icon(icon),
-    title: Text(title),
-    subtitle: Text(subtitle),
-    value: value,
-    onChanged: onChanged,
+  Widget build(BuildContext context) => SettingRow(
+    id: title,
+    label: SettingLabel(title, description: subtitle),
+    control: Switch(value: value, onChanged: onChanged),
   );
 }
 
@@ -324,16 +233,15 @@ class _HistorySizeState extends State<_HistorySize> {
   @override
   Widget build(BuildContext context) {
     final value = _dragging ?? widget.value;
-    return ListTile(
-      contentPadding: const .symmetric(horizontal: 20, vertical: 4),
-      leading: const Icon(Icons.history_rounded),
-      title: const Text('History size'),
-      subtitle: Text(
-        value == 0
+    return SettingRow(
+      id: 'history-size',
+      label: SettingLabel(
+        'History size',
+        description: value == 0
             ? 'Picked colors are not kept'
             : 'Keep the last $value colors',
       ),
-      trailing: SizedBox(
+      control: SizedBox(
         width: 240,
         child: Slider(
           value: value.toDouble(),
@@ -381,41 +289,43 @@ class _FormatRow extends StatelessWidget {
     final index = enabled.indexOf(format);
     final shown = index >= 0;
     final change = onChanged;
-    return CheckboxListTile(
-      contentPadding: const .only(left: 20, right: 12),
-      controlAffinity: .leading,
-      title: Text(format.label),
-      subtitle: shown ? null : const Text('Hidden from the color panel'),
-      value: shown,
-      // At least one format must stay visible.
-      onChanged: change == null || shown && enabled.length == 1
-          ? null
-          : (value) => change(
-              value!
-                  ? [...enabled, format]
-                  : [...enabled.where((other) => other != format)],
+    return SettingRow(
+      id: 'format-${format.name}',
+      label: SettingLabel(
+        format.label,
+        description: shown ? null : 'Hidden from the color panel',
+      ),
+      control: Row(
+        mainAxisSize: .min,
+        children: [
+          if (shown) ...[
+            IconButton(
+              tooltip: 'Move ${format.label} up',
+              onPressed: change == null || index == 0 ? null : () => _move(-1),
+              icon: const Icon(Icons.arrow_upward_rounded),
             ),
-      secondary: shown
-          ? Row(
-              mainAxisSize: .min,
-              children: [
-                IconButton(
-                  tooltip: 'Move ${format.label} up',
-                  onPressed: change == null || index == 0
-                      ? null
-                      : () => _move(-1),
-                  icon: const Icon(Icons.arrow_upward_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Move ${format.label} down',
-                  onPressed: change == null || index == enabled.length - 1
-                      ? null
-                      : () => _move(1),
-                  icon: const Icon(Icons.arrow_downward_rounded),
-                ),
-              ],
-            )
-          : null,
+            IconButton(
+              tooltip: 'Move ${format.label} down',
+              onPressed: change == null || index == enabled.length - 1
+                  ? null
+                  : () => _move(1),
+              icon: const Icon(Icons.arrow_downward_rounded),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Switch(
+            value: shown,
+            // At least one format must stay visible.
+            onChanged: change == null || shown && enabled.length == 1
+                ? null
+                : (value) => change(
+                    value
+                        ? [...enabled, format]
+                        : [...enabled.where((other) => other != format)],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
