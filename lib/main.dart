@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:remya_ui/settings_ui.dart';
 
 import 'app.dart';
 import 'features/recording/recording_host.dart';
@@ -31,7 +32,9 @@ CaptureEntrypoint parseEntrypoint(List<String> args) {
 String? settingsPage(List<String> args) {
   final index = args.indexOf('--settings');
   final page = index >= 0 && index + 1 < args.length ? args[index + 1] : '';
-  if (page.isNotEmpty && !settingsPages.any((entry) => entry.id == page)) {
+  if (page.isNotEmpty &&
+      page != remyaMaterialThemePageId &&
+      !settingsPages.any((entry) => entry.id == page)) {
     throw ArgumentError.value(page, 'page', 'Unknown settings page');
   }
   return page.isEmpty ? null : page;

@@ -12,10 +12,20 @@ import '../recording/recording_backend.dart';
 import 'preference_controller.dart';
 import 'settings_pages.dart';
 
-/// Pages from linux/packaging/remya-screen-capture.json.
+/// App-owned pages from linux/packaging/remya-screen-capture.json.
 const settingsPages = [
-  (id: 'recording', title: 'Recording', icon: Icons.videocam_rounded),
-  (id: 'color-picker', title: 'Color picker', icon: Icons.colorize_rounded),
+  (
+    id: 'recording',
+    title: 'Recording',
+    icon: Icons.videocam_rounded,
+    category: RemyaSettingsCategory.system,
+  ),
+  (
+    id: 'color-picker',
+    title: 'Color picker',
+    icon: Icons.colorize_rounded,
+    category: RemyaSettingsCategory.system,
+  ),
 ];
 
 const _appName = "Remy'a Screen Capture";
@@ -32,7 +42,7 @@ class ScreenCaptureSettingsApp extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: themeController,
     builder: (context, _) => MaterialApp(
-      title: 'Remya Screen Capture Settings',
+      title: 'Remy\'a Screen Capture Settings',
       debugShowCheckedModeBanner: false,
       theme: remyaCaptureTheme(.light),
       darkTheme: remyaCaptureTheme(.dark),
@@ -148,11 +158,13 @@ class _SettingsWindowState extends State<SettingsWindow> {
               id: page.id,
               title: page.title,
               icon: page.icon,
+              category: page.category,
               builder: (_) => switch (page.id) {
                 'recording' => RecordingSettingsPage(_recording),
                 _ => ColorPickerSettingsPage(_colorPicker),
               },
             ),
+          remyaMaterialThemePage(client: _client),
         ],
         footerPages: [
           RemyaSettingsPage(

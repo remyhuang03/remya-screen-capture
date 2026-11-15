@@ -85,7 +85,7 @@ String describePreferenceError(Object error) {
   // exports one.
   if (text.contains('org.freedesktop.DBus.Error.ServiceUnknown') ||
       text.contains('org.freedesktop.DBus.Error.NameHasNoOwner')) {
-    return 'Remya Core is unavailable. Start remyad to load and change these '
+    return 'Remy\'a Core is unavailable. Start remyad to load and change these '
         'settings.';
   }
   return text;

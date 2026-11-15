@@ -42,7 +42,7 @@ class RecordingOptions {
       );
     }
     throw const FormatException(
-      'Invalid recording preferences from Remya Core.',
+      'Invalid recording preferences from Remy\'a Core.',
     );
   }
 

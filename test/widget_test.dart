@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:remya_ui/settings_ui.dart';
 import 'package:remya_screen_capture/app.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_buttons.dart';
 import 'package:remya_screen_capture/features/capture_controls/capture_color_picker.dart';
@@ -24,6 +25,25 @@ void main() {
     expect(updated.textTheme.bodyMedium?.fontFamily, 'Inter');
   });
 
+  testWidgets('capture surfaces follow the shared light and dark mode', (
+    tester,
+  ) async {
+    final previous = themeController.theme;
+    addTearDown(() => themeController.theme = previous);
+    final palette = GlobalKey();
+    final app = RemyaScreenCaptureApp(home: SizedBox(key: palette));
+    for (final (mode, brightness) in [
+      (ThemeMode.light, Brightness.light),
+      (ThemeMode.dark, Brightness.dark),
+    ]) {
+      themeController.theme = .new(mode: mode);
+      await tester.pumpWidget(app);
+      await tester.pumpAndSettle();
+      expect(Theme.of(palette.currentContext!).brightness, brightness);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
   testWidgets('Preview opens and loads every design icon', (tester) async {
     tester.view.physicalSize = const Size(1019, 2300);
     tester.view.devicePixelRatio = 1;
@@ -32,7 +52,7 @@ void main() {
     await tester.pumpWidget(preview);
     await tester.pumpAndSettle();
 
-    expect(find.text('Components · Remya Screen Capture'), findsOneWidget);
+    expect(find.text('Components · Remy\'a Screen Capture'), findsOneWidget);
     for (final symbol in CaptureSymbol.values) {
       final icon = await rootBundle.load(
         'assets/icons/capture/${symbol.asset}.svg',
@@ -260,6 +280,10 @@ void main() {
     expect(settingsPage(['--settings']), isNull);
     expect(settingsPage(['--settings', 'recording']), 'recording');
     expect(settingsPage(['--settings', 'color-picker']), 'color-picker');
+    expect(
+      settingsPage(['--settings', remyaMaterialThemePageId]),
+      remyaMaterialThemePageId,
+    );
     expect(
       () => settingsPage(['--settings', '../invalid']),
       throwsArgumentError,

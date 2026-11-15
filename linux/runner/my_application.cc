@@ -93,7 +93,7 @@ static void my_application_activate(GApplication* application) {
     fl_dart_project_set_dart_entrypoint_arguments(
         project, self->dart_entrypoint_arguments);
     auto* window = gtk_application_window_new(GTK_APPLICATION(application));
-    gtk_window_set_title(GTK_WINDOW(window), "Remya Screen Capture Settings");
+    gtk_window_set_title(GTK_WINDOW(window), "Remy'a Screen Capture Settings");
     gtk_window_set_default_size(GTK_WINDOW(window), 1280, 720);
     // RemyaTitleBar replaces the GTK decorations.
     gtk_window_set_decorated(GTK_WINDOW(window), FALSE);

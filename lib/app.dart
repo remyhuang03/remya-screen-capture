@@ -27,15 +27,15 @@ class RemyaScreenCaptureApp extends StatelessWidget {
 
   final Widget home;
 
-  // Capture surfaces float over arbitrary screen content and were designed
-  // dark, so they always use the dark scheme of the shared seed.
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: themeController,
     builder: (context, _) => MaterialApp(
       title: "Remy'a Screen Capture",
       debugShowCheckedModeBanner: false,
-      theme: remyaCaptureTheme(.dark),
+      theme: remyaCaptureTheme(.light),
+      darkTheme: remyaCaptureTheme(.dark),
+      themeMode: themeController.theme.mode,
       home: home,
     ),
   );

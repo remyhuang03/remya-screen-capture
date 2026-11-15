@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:remya_ui/settings_ui.dart';
 import 'package:remya_screen_capture/features/color_picker/color_data.dart';
 import 'package:remya_screen_capture/features/settings/settings_window.dart';
 
@@ -17,7 +18,7 @@ void main() {
   });
   tearDown(() => state.deleteSync(recursive: true));
 
-  Future<void> pump(WidgetTester tester, String page) async {
+  Future<void> pump(WidgetTester tester, [String? page]) async {
     await tester.pumpWidget(
       MaterialApp(
         home: SettingsWindow(
@@ -106,4 +107,21 @@ void main() {
       ['hsl', 'rgb'],
     );
   });
+
+  testWidgets(
+    'defaults to recording and includes Material theme in navigation',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await pump(tester);
+      expect(find.text('System audio'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('nav-$remyaMaterialThemePageId')),
+        findsOneWidget,
+      );
+      expect(find.text('Material theme'), findsOneWidget);
+    },
+  );
 }

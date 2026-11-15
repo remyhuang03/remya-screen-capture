@@ -169,7 +169,7 @@ class ColorPickerPreferences {
         (json['historySize'] as int) > 128 ||
         json['formats'] is! List) {
       throw const FormatException(
-        'Invalid color picker preferences from Remya Core.',
+        'Invalid color picker preferences from Remy\'a Core.',
       );
     }
     final saved = json['formats'] as List;
@@ -183,7 +183,7 @@ class ColorPickerPreferences {
           _enumValue(ColorFormat.values, json['defaultFormat']),
         )) {
       throw const FormatException(
-        'Invalid color picker formats from Remya Core.',
+        'Invalid color picker formats from Remy\'a Core.',
       );
     }
     final history = json['historySize'] as int;

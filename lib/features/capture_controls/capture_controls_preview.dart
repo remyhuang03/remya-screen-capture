@@ -83,7 +83,7 @@ class _CaptureControlsPreviewState extends State<CaptureControlsPreview> {
                 padding: const .all(40),
                 children: [
                   Text(
-                    'Components · Remya Screen Capture',
+                    'Components · Remy\'a Screen Capture',
                     style: Theme.of(context).textTheme.titleLarge
                         ?.copyWith(fontSize: 20, fontWeight: .w700),
                   ),
