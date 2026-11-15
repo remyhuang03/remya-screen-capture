@@ -7,28 +7,20 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Search [existing issues](https://github.com/remyhuang03/remya-screen-capture/issues?q=is%3Aissue)
 first, then [choose an issue template](https://github.com/remyhuang03/remya-screen-capture/issues/new/choose).
-For a large feature or a change to capture behavior, open an issue first so we
-can agree on scope. Report vulnerabilities through the
-[security policy](SECURITY.md).
+Open an issue first for a substantial change so we can agree on scope.
+Follow the [security policy](SECURITY.md) for vulnerabilities.
 
 ## Set up and make a change
 
-1. Fork the repository and start a topic branch from `main`, for example
-   `fix/region-selection` or `docs/installation`.
-2. Follow the [development setup](README.md#-development). Use the Flutter SDK
-   pinned in `.fvmrc` via FVM, the Rust toolchain pinned in `rust-toolchain.toml`,
-   and a sibling `remya-core` checkout for `remya_client` and `remya_ui`.
-3. Keep the pull request focused. Follow the [project guidelines](AGENTS.md) for
-   architecture, accessible UI, and regenerating Rust bridge bindings when the
-   bridge API changes. Add a regression test for non-trivial fixes when practical.
-4. Use Conventional Commits, for example
-   `fix(screenshot): preserve the selected monitor`.
-5. Open a pull request against `main`. Describe the change, link relevant
-   issues, and record validation results.
+1. Start a topic branch from `main`, for example `fix/startup` or `docs/installation`.
+2. Follow the [setup in the README](README.md). Use the Rust toolchain specified in `rust-toolchain.toml`. Install the Flutter SDK pinned in `.fvmrc` with FVM. Check out Remy'a Core as a sibling directory. Use the Core revision pinned in the Linux workflow to reproduce CI.
+3. Follow the [project guidelines](AGENTS.md) and add a regression test for a non-trivial fix.
+4. Use Conventional Commits, for example `fix(linux): handle startup errors`.
+5. Open a pull request against `main` and record the changes and validation results.
 
 ## Verify your change
 
-Run the checks relevant to the files you changed:
+Run the checks relevant to your change. The [Linux workflow](.github/workflows/linux.yml) lists the full CI checks.
 
 ```bash
 fvm dart format --output=none --set-exit-if-changed lib test
@@ -36,16 +28,18 @@ fvm flutter analyze
 fvm flutter test
 fvm flutter build linux --debug
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
 git diff --check
 ```
 
-For capture, recording, or input changes, test the affected flow in a real
-Hyprland session when possible. Record the monitor, GPU, or audio setup when
-it affects the result, and state any scenarios you could not verify. Share
-only sanitized logs and media.
+Test changes that depend on the compositor, hardware or session services in a
+real Hyprland session when possible. State what you verified and share only
+sanitized logs and attachments.
 
-See [LICENSE](LICENSE) for the project's PolyForm Noncommercial License 1.0.0.
-When adding dependencies or assets, verify license compatibility and preserve
-required notices.
+Maintainers can run **Linux CI** from the Actions tab on `main` to build a
+Linux x86_64 candidate. The workflow uploads the archive, build information, and
+SHA-256 checksum as an Actions artifact.
+
+See [LICENSE](LICENSE) for the PolyForm Noncommercial License 1.0.0. Verify
+dependency and asset compatibility and preserve required notices.

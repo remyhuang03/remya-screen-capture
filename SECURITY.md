@@ -2,37 +2,25 @@
 
 ## Supported versions
 
-Security fixes are prioritized for the latest release and the default branch.
-Older releases are not guaranteed to receive backports. If the problem is
-observable only on an older release, you can still report it privately.
+Security fixes are prioritized for the latest release and the default branch. Older
+releases may receive fixes where practical.
 
 ## Reporting a vulnerability
 
 Use [GitHub private vulnerability reporting](https://github.com/remyhuang03/remya-screen-capture/security/advisories/new).
-Please keep vulnerability details out of public issues and pull requests.
-Include the affected release or commit, your environment, the expected security
-boundary, the observed impact, and enough information to verify it with
-sanitized evidence. Never include credentials or private recordings.
+Keep vulnerability details out of issues and pull requests. Include the affected version
+or commit, environment, expected security boundary, observed impact, and sanitized
+evidence. Remove credentials, private data, and sensitive logs.
 
-The maintainer will use the private report to discuss verification, a fix, and
-disclosure with you. Please coordinate before publishing details.
+Coordinate disclosure with the maintainer so they can verify the report and prepare a
+fix.
 
 ## Scope
 
-Remy'a Screen Capture is a local Linux desktop app for Hyprland. Reports can
-cover its Flutter UI, Linux runner, Rust capture backend, media and clipboard
-handling, and the way it invokes external programs such as GPU Screen Recorder
-and FFmpeg. Relevant inputs include paths, media files, and data returned by
-desktop services or helper processes.
+Remy'a Screen Capture handles screen and audio content, temporary media, exports,
+clipboard data and subprocesses such as GPU Screen Recorder and FFmpeg. Report boundary
+violations such as capture beyond the selected target or recording options, or file and
+clipboard operations outside the action the user requested.
 
-Report issues where a realistic action or input can cross a security boundary.
-For example, capture should respect the selected target and recording options;
-temporary and exported media should stay within the intended storage flow;
-and file handling, clipboard writes, and subprocess calls should honor the
-user's requested action. Explain any access or user interaction required and
-which data or operation is affected.
-
-Ordinary capture failures and UI bugs can go to the public issue tracker.
-Report standalone dependency vulnerabilities to the upstream project. If this
-app's integration exposes users to a dependency issue, report that exposure
-here as well.
+Report standalone dependency vulnerabilities to the upstream project. Report exposure
+specific to this application's integration here.

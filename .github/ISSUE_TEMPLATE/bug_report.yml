@@ -25,7 +25,7 @@ body:
     id: version
     attributes:
       label: App version and installation method
-      placeholder: "Example: v0.1.0 from AUR, or a source commit"
+      placeholder: "Example: an installed release, package version, or source commit"
     validations:
       required: true
   - type: input
@@ -39,7 +39,7 @@ body:
     id: reproduction
     attributes:
       label: Steps to reproduce
-      description: Include the command, shortcut, or capture mode if relevant.
+      description: Include the relevant command, action, or shortcut.
     validations:
       required: true
   - type: textarea
@@ -53,7 +53,5 @@ body:
     id: diagnostics
     attributes:
       label: Relevant setup and logs
-      description: |
-        For display issues, include monitor count, scale, and rotation. For recording or export,
-        include the GPU and driver, affected audio source, or GPU Screen Recorder and FFmpeg
-        versions as relevant. Share only sanitized logs or sample media.
+      description: >-
+        For display issues, include monitor count, scale, and rotation. For recording or export, include the GPU and driver, affected audio source, or GPU Screen Recorder and FFmpeg versions as relevant. Share only sanitized logs or sample media.
