@@ -369,7 +369,11 @@ class _ExportFooter extends StatelessWidget {
         else
           FilledButton.icon(
             onPressed: onExport,
-            icon: const Icon(Icons.file_download_rounded, size: 20),
+            icon: const Icon(
+              Symbols.file_download_rounded,
+              size: 20,
+              weight: captureIconWeight,
+            ),
             label: const Text('Export'),
             style: FilledButton.styleFrom(
               minimumSize: const Size(0, 48),

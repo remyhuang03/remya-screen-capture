@@ -362,12 +362,22 @@ void main() {
 
   testWidgets('Editor controls fit narrow windows', (tester) async {
     await _open(tester, image: _testImage(), onCopy: (_) async {});
+    final countStyle = tester.widget<Text>(find.text('0 objects')).style!;
+    final shortcuts = find.text('Shortcuts');
+    final shortcutsStyle = tester
+        .widget<RichText>(
+          find.descendant(of: shortcuts, matching: find.byType(RichText)),
+        )
+        .text
+        .style!;
+    expect(shortcutsStyle.fontSize, countStyle.fontSize);
+    expect(shortcutsStyle.color, countStyle.color);
     for (final width in [1024.0, 960.0, 800.0, 540.0, 480.0, 400.0]) {
       tester.view.physicalSize = Size(width, 500);
       await _press(tester, LogicalKeyboardKey.keyT);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: "Window width $width");
-      expect(find.text('Shortcuts'), findsOneWidget);
+      expect(shortcuts, findsOneWidget);
     }
   });
 

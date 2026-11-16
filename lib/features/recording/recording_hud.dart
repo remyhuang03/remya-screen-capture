@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../capture_controls/capture_buttons.dart';
@@ -806,9 +807,11 @@ class _RecordingStatus extends StatelessWidget {
           Opacity(
             opacity: paused ? .55 : 1,
             child: const Icon(
-              Icons.circle_rounded,
+              Symbols.circle_rounded,
               size: 10,
               color: Color(0xfff2b8b5),
+              fill: 1,
+              weight: captureIconWeight,
             ),
           ),
           Flexible(

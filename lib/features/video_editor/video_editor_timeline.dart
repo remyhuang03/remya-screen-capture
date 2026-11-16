@@ -61,7 +61,12 @@ class _Transport extends StatelessWidget {
                     ),
                     child: value
                         ? const CaptureIcon(.pause)
-                        : const Icon(Icons.play_arrow_rounded, size: 28),
+                        : const Icon(
+                            Symbols.play_arrow_rounded,
+                            size: 28,
+                            fill: 1,
+                            weight: captureIconWeight,
+                          ),
                   ),
                 ),
               ),
@@ -221,7 +226,11 @@ class _Timeline extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.content_cut_rounded, size: 16),
+              const Icon(
+                Symbols.content_cut_rounded,
+                size: 16,
+                weight: captureIconWeight,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -551,9 +560,11 @@ class _Playhead extends StatelessWidget {
               left: x - 6,
               top: -10,
               child: Icon(
-                Icons.circle_rounded,
+                Symbols.circle_rounded,
                 size: 12,
                 color: colors.onSurface,
+                fill: 1,
+                weight: captureIconWeight,
               ),
             ),
             Positioned(

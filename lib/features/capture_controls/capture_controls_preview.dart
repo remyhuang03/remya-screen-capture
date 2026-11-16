@@ -268,7 +268,7 @@ class _CaptureControlsPreviewState extends State<CaptureControlsPreview> {
                   ),
                   _Section(
                     title: 'Icons',
-                    description: 'Material Icons and SVG artwork · 20 px',
+                    description: 'Material Symbols Rounded · 20 px',
                     spacing: 0,
                     children: [
                       for (final symbol in CaptureSymbol.values)

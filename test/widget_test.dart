@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:remya_ui/settings_ui.dart';
 import 'package:remya_screen_capture/app.dart';
@@ -55,17 +55,13 @@ void main() {
 
     expect(find.text('Components · Remy\'a Screen Capture'), findsOneWidget);
     for (final symbol in CaptureSymbol.values) {
-      if (symbol.icon case final icon?) {
-        expect(find.byIcon(icon), findsWidgets, reason: symbol.name);
-      } else {
-        expect(_captureSvg(symbol.svgAsset!), findsWidgets);
-      }
+      expect(find.byIcon(symbol.icon), findsWidgets, reason: symbol.name);
     }
     expect(find.text('Icons'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Compact capture icons keep their assets, size and tint', (
+  testWidgets('Compact capture icons keep their glyphs, size and tint', (
     tester,
   ) async {
     const tint = Colors.deepPurple;
@@ -85,19 +81,16 @@ void main() {
       ),
     );
 
-    for (final asset in ['region-small', 'window-small']) {
-      final svg = tester.widget<SvgPicture>(_captureSvg(asset));
-      expect(svg.width, 18);
-      expect(svg.height, 18);
-      expect(svg.colorFilter, const ColorFilter.mode(tint, .srcIn));
-    }
     for (final (glyph, size) in [
-      (Icons.colorize_rounded, 18),
-      (Icons.add_rounded, 16),
+      (Symbols.screenshot_region_rounded, 18),
+      (Symbols.select_window_2_rounded, 18),
+      (Symbols.colorize_rounded, 18),
+      (Symbols.add_rounded, 16),
     ]) {
       final icon = tester.widget<Icon>(find.byIcon(glyph));
       expect(icon.size, size);
       expect(icon.color, tint);
+      expect(icon.weight, 400);
     }
   });
 
@@ -345,11 +338,3 @@ void main() {
     },
   );
 }
-
-Finder _captureSvg(String asset) => find.byWidgetPredicate(
-  (widget) =>
-      widget is SvgPicture &&
-      widget.bytesLoader is SvgAssetLoader &&
-      (widget.bytesLoader as SvgAssetLoader).assetName ==
-          'assets/icons/capture/$asset.svg',
-);

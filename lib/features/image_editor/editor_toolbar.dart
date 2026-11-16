@@ -637,6 +637,9 @@ class _EditorStatus extends StatelessWidget {
                 icon: const CaptureIcon(.keyboard),
                 label: const Text('Shortcuts'),
                 style: TextButton.styleFrom(
+                  textStyle: style,
+                  foregroundColor: colors.onSurfaceVariant,
+                  iconColor: colors.onSurfaceVariant,
                   minimumSize: const Size(0, 32),
                   tapTargetSize: .shrinkWrap,
                   padding: const .symmetric(horizontal: 8),

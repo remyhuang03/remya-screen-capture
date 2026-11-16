@@ -10,7 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   material_ui: ^1.5.0
-  flutter_svg: ^2.3.2
   file_selector: ^1.1.0
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
@@ -19,6 +18,7 @@ dependencies:
     path: ../remya-core/packages/remya_client
   remya_ui:
     path: ../remya-core/packages/remya_ui
+  material_symbols_icons: ^4.2960.0
 
 dev_dependencies:
   flutter_test:
@@ -29,16 +29,6 @@ flutter:
   uses-material-design: true
   assets:
     - LICENSE
-    - assets/icons/capture/counter.svg
-    - assets/icons/capture/cursor.svg
-    - assets/icons/capture/highlighter.svg
-    - assets/icons/capture/laser-pointer.svg
-    - assets/icons/capture/mosaic.svg
-    - assets/icons/capture/region-small.svg
-    - assets/icons/capture/region.svg
-    - assets/icons/capture/save.svg
-    - assets/icons/capture/window-small.svg
-    - assets/icons/capture/window.svg
     - assets/icons/app_icon.png
     - assets/licenses/material-symbols.txt
     - lib/src/rust/capture/THIRD_PARTY_NOTICES.txt
