@@ -116,6 +116,9 @@ class RecordingHudController extends ChangeNotifier {
   Timer? _laserTimer;
   int? _dragPointer;
   Offset _dragOffset = Offset.zero;
+  late final _dragBounds = {
+    for (final monitor in monitors) monitor: ValueNotifier<Rect?>(null),
+  };
   int? _drawingPointer;
 
   Rect get _drawingBounds => region ?? (Offset.zero & target.bounds.size);
@@ -183,6 +186,8 @@ class RecordingHudController extends ChangeNotifier {
     _dockWatch?.cancel();
     _dragPointer = pointer;
     _dragOffset = global - _position;
+    _updateDragBounds();
+    notifyListeners();
   }
 
   void _moveDrag(int pointer, Offset global) {
@@ -198,7 +203,19 @@ class RecordingHudController extends ChangeNotifier {
     }
     _docked = null;
     _position = global - _dragOffset;
-    notifyListeners();
+    _updateDragBounds();
+  }
+
+  void _updateDragBounds() {
+    final toolbar = _toolbar;
+    for (final entry in _dragBounds.entries) {
+      entry.value.value = _toolbarOnOutput(toolbar, entry.key);
+    }
+  }
+
+  Rect? _toolbarOnOutput(Rect toolbar, CaptureMonitor monitor) {
+    if (!toolbar.overlaps(monitor.bounds)) return null;
+    return toolbar.shift(-monitor.bounds.topLeft);
   }
 
   void _endDrag(int pointer, Offset global, {bool cancelled = false}) {
@@ -207,7 +224,8 @@ class RecordingHudController extends ChangeNotifier {
     _dragPointer = null;
     _settle();
     final local = global - _toolbarMonitor.bounds.topLeft;
-    if (!(_placement(_toolbarMonitor)?.toolbar.contains(local) ?? false)) {
+    if (!(_settledPlacement(_toolbarMonitor)?.toolbar.contains(local) ??
+        false)) {
       _leave();
     }
   }
@@ -275,7 +293,7 @@ class RecordingHudController extends ChangeNotifier {
     try {
       final cursor = await _cursorPosition();
       if (!timer.isActive || cursor == null) return;
-      final placement = _placement(_toolbarMonitor);
+      final placement = _settledPlacement(_toolbarMonitor);
       final local = cursor - _toolbarMonitor.bounds.topLeft;
       if (placement != null &&
           (placement.toolbar.contains(local) ||
@@ -289,15 +307,15 @@ class RecordingHudController extends ChangeNotifier {
     }
   }
 
-  ({Rect toolbar, Rect? options, Rect? trigger})? _placement(
+  ({Rect toolbar, Rect? options, Rect? trigger})? _settledPlacement(
     CaptureMonitor monitor,
   ) {
-    if (_dragPointer == null && monitor != _toolbarMonitor) return null;
-    final toolbar = _toolbar.shift(-monitor.bounds.topLeft);
+    if (monitor != _toolbarMonitor) return null;
+    final toolbar = _toolbarOnOutput(_toolbar, monitor);
+    if (toolbar == null) return null;
     final viewport = Offset.zero & monitor.bounds.size;
-    if (!toolbar.overlaps(viewport)) return null;
     Rect? options;
-    if (_annotation == .marker && _dragPointer == null && !_hidden) {
+    if (_annotation == .marker && !_hidden) {
       final scale = _scale(monitor);
       final size = _optionsSize * scale;
       final gap = _panelGap * scale;
@@ -448,6 +466,9 @@ class RecordingHudController extends ChangeNotifier {
     _errorTimer?.cancel();
     _seconds.dispose();
     _ink.dispose();
+    for (final bounds in _dragBounds.values) {
+      bounds.dispose();
+    }
     super.dispose();
   }
 }
@@ -527,24 +548,29 @@ class _RecordingHudState extends State<RecordingHud> {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final placement = controller._placement(monitor);
+        final dragging = controller._dragPointer != null;
+        final placement = dragging
+            ? null
+            : controller._settledPlacement(monitor);
         final onTarget = monitor == controller.target;
         final drawing = onTarget && controller._annotation != .none;
         final visible = placement != null && !controller._hidden;
         final ownsToolbar = monitor == controller._toolbarMonitor;
         final picker = ownsToolbar && controller._pickingColor;
         final viewport = Offset.zero & monitor.bounds.size;
-        final input = <Rect>[
-          if (drawing) controller._drawingBounds,
-          if (visible) placement.toolbar.intersect(viewport),
-          ?placement?.options,
-          if (!visible && placement?.trigger != null) placement!.trigger!,
-        ];
-        // Map the destination input before the implicit Wayland drag grab ends.
-        _publishInput(
-          picker ? [viewport] : input,
-          visible || drawing || picker,
-        );
+        // Wayland's implicit grab keeps motion and release on the press surface.
+        if (!dragging) {
+          _publishInput([
+            if (picker)
+              viewport
+            else ...[
+              if (drawing) controller._drawingBounds,
+              if (visible) placement.toolbar.intersect(viewport),
+              ?placement?.options,
+              if (!visible) ?placement?.trigger,
+            ],
+          ], visible || drawing || picker);
+        }
 
         Offset global(PointerEvent event) =>
             event.localPosition + monitor.bounds.topLeft;
@@ -580,8 +606,10 @@ class _RecordingHudState extends State<RecordingHud> {
                 fit: .expand,
                 children: [
                   IgnorePointer(
-                    child: CustomPaint(
-                      painter: _RecordingInk(controller, drawsInk: onTarget),
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        painter: _RecordingInk(controller, drawsInk: onTarget),
+                      ),
                     ),
                   ),
                   if (drawing)
@@ -589,26 +617,12 @@ class _RecordingHudState extends State<RecordingHud> {
                       rect: controller._drawingBounds,
                       child: _drawingInput(controller),
                     ),
-                  if (visible)
-                    Positioned.fromRect(
-                      rect: placement.toolbar,
-                      child: MouseRegion(
-                        onEnter: (_) => controller._holdOpen(),
-                        onExit: (_) => controller._leave(),
-                        child: FittedBox(
-                          child: SizedBox.fromSize(
-                            size: _toolbarSize,
-                            child: _RecordingToolbar(
-                              controller: controller,
-                              onDragStart: (event) => controller._beginDrag(
-                                event.pointer,
-                                event.position + monitor.bounds.topLeft,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                  _positionedToolbar(
+                    controller,
+                    monitor,
+                    visible ? placement.toolbar : null,
+                    dragging: dragging,
+                  ),
                   if (placement?.options case final rect?)
                     Positioned.fromRect(
                       rect: rect,
@@ -635,6 +649,42 @@ class _RecordingHudState extends State<RecordingHud> {
             ),
           ),
         );
+      },
+    );
+  }
+
+  Widget _positionedToolbar(
+    RecordingHudController controller,
+    CaptureMonitor monitor,
+    Rect? settledBounds, {
+    required bool dragging,
+  }) {
+    final dragBounds = controller._dragBounds[monitor]!;
+    return ValueListenableBuilder(
+      valueListenable: dragBounds,
+      child: MouseRegion(
+        onEnter: (_) => controller._holdOpen(),
+        onExit: (_) => controller._leave(),
+        child: FittedBox(
+          child: SizedBox.fromSize(
+            size: _toolbarSize,
+            child: RepaintBoundary(
+              child: _RecordingToolbar(
+                controller: controller,
+                onDragStart: (event) => controller._beginDrag(
+                  event.pointer,
+                  event.position + monitor.bounds.topLeft,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      builder: (context, bounds, toolbar) {
+        final rect = dragging ? bounds : settledBounds;
+        return rect == null
+            ? const SizedBox.shrink()
+            : Positioned.fromRect(rect: rect, child: toolbar!);
       },
     );
   }
