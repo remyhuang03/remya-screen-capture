@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:remya_screen_capture/features/video_editor/video_editor.dart';
 import 'package:remya_screen_capture/features/video_editor/video_media.dart';
 
 void main() {
@@ -24,6 +26,49 @@ void main() {
     expect(trim.range.end - trim.range.start, trim.minimum);
     trim.reset();
     expect(trim.range, (start: Duration.zero, end: trim.duration));
+  });
+
+  test('playhead bounds follow trim changes and history exactly', () {
+    final trim = VideoTrim(
+      const Duration(seconds: 10),
+      const Duration(milliseconds: 40),
+    );
+    const start = Duration(microseconds: 1000500);
+    const end = Duration(microseconds: 1876500);
+    const inside = Duration(milliseconds: 1400);
+    trim.move(start: true, position: start);
+    trim.move(start: false, position: end);
+    expect(trim.clampPosition(Duration.zero), start);
+    expect(trim.clampPosition(trim.duration), end);
+    expect(trim.clampPosition(inside), inside);
+    expect(trim.clampPosition(start), start);
+    expect(trim.clampPosition(end), end);
+    trim.undo();
+    expect(trim.clampPosition(trim.duration), trim.duration);
+    trim.redo();
+    expect(trim.clampPosition(trim.duration), end);
+    trim.reset();
+    expect(trim.clampPosition(Duration.zero), Duration.zero);
+  });
+
+  test('timecode uses frame numbers and rolls over at nominal FPS', () {
+    const fps = 30000 / 1001;
+    expect(
+      videoTimecode(const Duration(microseconds: 33367), fps),
+      '00:00:00:01',
+    );
+    expect(
+      videoTimecode(const Duration(microseconds: 967633), fps),
+      '00:00:00:29',
+    );
+    expect(
+      videoTimecode(const Duration(microseconds: 1001000), fps),
+      '00:00:01:00',
+    );
+    expect(
+      videoTimecode(const Duration(hours: 1, milliseconds: 40), 25),
+      '01:00:00:01',
+    );
   });
 
   group('FFmpeg integration', () {
@@ -87,6 +132,63 @@ void main() {
     });
 
     tearDownAll(() => directory.delete(recursive: true));
+
+    testWidgets('trim handle inner edges and reset align to the track', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final close = ValueNotifier(0);
+      addTearDown(close.dispose);
+      Finder control(String label) => find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == label,
+      );
+      final track = control('Video timeline');
+      await tester.runAsync(() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: VideoEditor(
+              path: source.path,
+              systemAudio: false,
+              microphone: false,
+              onClose: () {},
+              closeRequests: close,
+              onMoveWindow: () {},
+            ),
+          ),
+        );
+        final deadline = DateTime.now().add(const Duration(seconds: 3));
+        while (track.evaluate().isEmpty && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await tester.pump();
+        }
+      });
+      final bounds = tester.getRect(track);
+      final start = control('Trim start');
+      final end = control('Trim end');
+      expect(tester.getRect(start).right, bounds.left);
+      expect(tester.getRect(end).left, bounds.right);
+      final reset = find.ancestor(
+        of: find.text('Reset trim'),
+        matching: find.byWidgetPredicate((widget) => widget is TextButton),
+      );
+      expect(tester.getRect(reset).right, tester.getRect(end).right);
+      expect(
+        tester.getRect(find.text('Reset trim')).right,
+        tester.getRect(end).right,
+      );
+      tester.widget<Semantics>(start).properties.onIncrease!();
+      tester.widget<Semantics>(end).properties.onDecrease!();
+      await tester.pump();
+      expect(tester.getRect(start).right, greaterThan(bounds.left));
+      expect(tester.getRect(end).left, lessThan(bounds.right));
+      final path = tester.widget<Text>(find.textContaining('_edited.mp4'));
+      expect(path.textAlign, TextAlign.left);
+      expect(path.textDirection, TextDirection.ltr);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
 
     for (final format in VideoFormat.values) {
       test(

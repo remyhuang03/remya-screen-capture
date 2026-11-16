@@ -415,9 +415,13 @@ class _RecordingHostState extends State<RecordingHost>
       monitors: _monitors,
       target: target.monitor,
       region: target.region,
-      systemAudio: run.systemAudio,
-      microphone: run.microphone,
+      systemAudio: () =>
+          (enabled: run.systemAudio, available: run.canToggleSystemAudio),
+      microphone: () =>
+          (enabled: run.microphone, available: run.canToggleMicrophone),
       cursor: run.options.cursor,
+      onSystemAudio: run.setSystemAudio,
+      onMicrophone: run.setMicrophone,
       elapsed: () => run.elapsed,
       paused: () => run.paused,
       onPause: () => run.setPaused(!run.paused),
@@ -506,6 +510,7 @@ class _RecordingHostState extends State<RecordingHost>
         path: result.path,
         systemAudio: result.systemAudio,
         microphone: result.microphone,
+        microphoneAudioSlot: result.microphoneAudioSlot,
         warning: warning,
         onClose: () => unawaited(_quit()),
         closeRequests: _closeRequests,

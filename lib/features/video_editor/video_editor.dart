@@ -12,6 +12,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../capture_controls/capture_buttons.dart';
 import '../capture_controls/capture_icon.dart';
+import '../settings/open_settings.dart';
 import 'video_media.dart';
 
 part 'video_editor_timeline.dart';
@@ -23,6 +24,7 @@ class VideoEditor extends StatefulWidget {
     required this.path,
     required this.systemAudio,
     required this.microphone,
+    this.microphoneAudioSlot,
     this.warning,
     required this.onClose,
     required this.closeRequests,
@@ -32,6 +34,7 @@ class VideoEditor extends StatefulWidget {
   final String path;
   final bool systemAudio;
   final bool microphone;
+  final int? microphoneAudioSlot;
   final String? warning;
   final VoidCallback onClose;
   final Listenable closeRequests;
@@ -68,7 +71,9 @@ class _VideoEditorState extends State<VideoEditor> {
   bool _closing = false;
   bool _ready = false;
   bool _scrubbing = false;
-  bool _atEnd = false;
+  bool _trimming = false;
+  bool _positionPinned = false;
+  int _seekRequest = 0;
   bool _transportBusy = false;
   bool _choosingFile = false;
 
@@ -80,7 +85,9 @@ class _VideoEditorState extends State<VideoEditor> {
   int? get _systemTrack =>
       widget.systemAudio ? _media?.audioTracks.firstOrNull : null;
   int? get _microphoneTrack => widget.microphone
-      ? _media?.audioTracks.elementAtOrNull(widget.systemAudio ? 1 : 0)
+      ? _media?.audioTracks.elementAtOrNull(
+          widget.microphoneAudioSlot ?? (widget.systemAudio ? 1 : 0),
+        )
       : null;
 
   @override
@@ -127,6 +134,8 @@ class _VideoEditorState extends State<VideoEditor> {
           _player = player;
           _video = video;
         });
+        await video.platform.future.timeout(const Duration(seconds: 8));
+        if (!mounted) return;
         await player
             .open(Media(widget.path), play: false)
             .timeout(const Duration(seconds: 8));
@@ -138,9 +147,12 @@ class _VideoEditorState extends State<VideoEditor> {
           player.stream.playing.listen((playing) => _playing.value = playing),
           player.stream.position.listen(_updatePosition),
           player.stream.completed.listen((completed) {
-            if (completed && mounted) {
-              _atEnd = true;
-              _position.value = _trim!.range.end;
+            if (completed &&
+                mounted &&
+                !_scrubbing &&
+                !_trimming &&
+                !_positionPinned) {
+              _setScrubPosition(_trim!.range.end);
             }
           }),
           player.stream.error.listen((error) {
@@ -148,6 +160,7 @@ class _VideoEditorState extends State<VideoEditor> {
           }),
         ]);
         setState(() => _ready = true);
+        if (_positionPinned) await _seek(_position.value);
         if (_previewSpeed != 1) await player.setRate(_previewSpeed);
         if (player.platform case final NativePlayer native
             when _systemTrack != null && _microphoneTrack != null) {
@@ -155,6 +168,9 @@ class _VideoEditorState extends State<VideoEditor> {
             'lavfi-complex',
             '[aid1][aid2]amix=inputs=2:duration=longest[ao]',
           );
+        } else if (player.platform case final NativePlayer native
+            when _microphoneTrack != null && widget.microphoneAudioSlot == 1) {
+          await native.setProperty('aid', '2');
         }
         return;
       } catch (error) {
@@ -205,22 +221,23 @@ class _VideoEditorState extends State<VideoEditor> {
   }
 
   void _updatePosition(Duration position) {
-    if (!mounted || _scrubbing || _atEnd) return;
+    if (!mounted || _scrubbing || _trimming || _positionPinned) return;
     final trim = _trim!;
+    _position.value = trim.clampPosition(position);
     if (position >= trim.range.end && _playing.value) {
-      _atEnd = true;
-      _position.value = trim.range.end;
+      _positionPinned = true;
       final player = _player;
       if (player != null) unawaited(_pauseAtCut(player, trim.range.end));
-      return;
     }
-    _position.value = position;
   }
 
   Future<void> _pauseAtCut(Player player, Duration end) async {
+    final request = _seekRequest;
     try {
       await player.pause();
-      await player.seek(_lastPlayablePosition(end));
+      if (mounted && request == _seekRequest && _positionPinned) {
+        await _seekFrame(player, _lastPlayablePosition(end));
+      }
     } catch (error) {
       if (mounted) _notify('Playback error. ${_message(error)}');
     }
@@ -233,9 +250,26 @@ class _VideoEditorState extends State<VideoEditor> {
         : position;
   }
 
+  Future<void> _seekFrame(Player player, Duration position) {
+    if (player.platform case final NativePlayer native) {
+      return native.command([
+        'seek',
+        (position.inMicroseconds / Duration.microsecondsPerSecond).toString(),
+        'absolute+exact',
+      ]);
+    }
+    return player.seek(position);
+  }
+
   Future<void> _transport(Future<void> Function(Player) action) async {
     final player = _player;
-    if (!_ready || player == null || _transportBusy) return;
+    if (!_ready ||
+        player == null ||
+        _transportBusy ||
+        _scrubbing ||
+        _trimming) {
+      return;
+    }
     _transportBusy = true;
     try {
       await action(player);
@@ -252,37 +286,47 @@ class _VideoEditorState extends State<VideoEditor> {
       return;
     }
     final range = _trim!.range;
-    if (_atEnd ||
-        _position.value < range.start ||
-        _position.value >= range.end) {
-      _atEnd = false;
-      await player.seek(range.start);
+    final actual = player.state.position;
+    ++_seekRequest;
+    _positionPinned = false;
+    if (_position.value >= range.end ||
+        actual < range.start ||
+        actual >= range.end) {
+      await _seekFrame(player, range.start);
     }
     await player.play();
   });
 
-  Future<void> _seek(Duration position) => _transport((player) async {
-    _atEnd = false;
-    await player.seek(_lastPlayablePosition(position));
-  });
+  void _setScrubPosition(Duration position) {
+    ++_seekRequest;
+    // mpv reports a decoded frame timestamp, which can differ from the cut.
+    _positionPinned = true;
+    _position.value = _trim!.clampPosition(position);
+  }
 
-  Future<void> _skip(int seconds) {
-    final range = _trim!.range;
-    final requested = _position.value + Duration(seconds: seconds);
-    return _seek(
-      Duration(
-        microseconds: requested.inMicroseconds.clamp(
-          range.start.inMicroseconds,
-          range.end.inMicroseconds,
-        ),
-      ),
-    );
+  Future<void> _seek(Duration position, {bool pause = false}) async {
+    _setScrubPosition(position);
+    final player = _player;
+    if (!_ready || player == null) return;
+    final request = _seekRequest;
+    final target = _lastPlayablePosition(_position.value);
+    try {
+      if (pause) await player.pause();
+      if (mounted && request == _seekRequest) await _seekFrame(player, target);
+    } catch (error) {
+      if (mounted) _notify('Playback error. ${_message(error)}');
+    }
   }
 
   Future<void> _step({required bool forward}) => _transport((player) async {
+    final trim = _trim!;
+    final range = trim.range;
+    final position = _position.value;
+    if (forward ? position >= range.end : position <= range.start) return;
     if (player.platform case final NativePlayer native) {
-      _atEnd = false;
       if (_playing.value) await player.pause();
+      ++_seekRequest;
+      _positionPinned = false;
       await native.command([forward ? 'frame-step' : 'frame-back-step']);
     }
   });
@@ -313,13 +357,33 @@ class _VideoEditorState extends State<VideoEditor> {
   }
 
   void _moveTrim(bool start, Duration position) {
-    final player = _player;
-    if (_playing.value && player != null) unawaited(player.pause());
-    setState(() => _trim!.move(start: start, position: position));
+    _editTrim(() => _trim!.move(start: start, position: position));
+  }
+
+  void _editTrim(VoidCallback edit) {
+    final position = _position.value;
+    final previous = _trim!.range;
+    setState(edit);
+    if (_trim!.range == previous) return;
+    if (_trimming) {
+      _setScrubPosition(position);
+    } else {
+      unawaited(_seek(position, pause: _playing.value));
+    }
+  }
+
+  void _startTrimDrag() {
+    _trimming = true;
+    _trim!.startDrag();
+    if (_player case final player? when _playing.value) {
+      unawaited(_setPlayerOption(player.pause()));
+    }
   }
 
   void _finishTrimDrag() {
+    _trimming = false;
     setState(_trim!.finishDrag);
+    unawaited(_seek(_position.value));
   }
 
   Future<void> _showFolder(String path) async {
@@ -368,6 +432,14 @@ class _VideoEditorState extends State<VideoEditor> {
   void _notify(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openSettings() async {
+    try {
+      await openCaptureSettings(page: 'recording');
+    } catch (error) {
+      if (mounted) _notify('Could not open settings. ${_message(error)}');
+    }
   }
 
   Future<void> _chooseDestination() async {
@@ -553,16 +625,18 @@ class _VideoEditorState extends State<VideoEditor> {
         const SingleActivator(.escape): _requestClose,
         if (media != null) ...{
           const SingleActivator(.space): () => unawaited(_playPause()),
-          const SingleActivator(.arrowLeft): () => unawaited(_skip(-5)),
-          const SingleActivator(.arrowRight): () => unawaited(_skip(5)),
+          const SingleActivator(.arrowLeft): () =>
+              unawaited(_step(forward: false)),
+          const SingleActivator(.arrowRight): () =>
+              unawaited(_step(forward: true)),
           const SingleActivator(.comma): () => unawaited(_step(forward: false)),
           const SingleActivator(.period): () => unawaited(_step(forward: true)),
           const SingleActivator(.keyI): () => _moveTrim(true, _position.value),
           const SingleActivator(.keyO): () => _moveTrim(false, _position.value),
           const SingleActivator(.keyZ, control: true): () =>
-              setState(_trim!.undo),
+              _editTrim(_trim!.undo),
           const SingleActivator(.keyY, control: true): () =>
-              setState(_trim!.redo),
+              _editTrim(_trim!.redo),
         },
       },
       child: Focus(
@@ -576,7 +650,7 @@ class _VideoEditorState extends State<VideoEditor> {
                 subtitle: media == null
                     ? null
                     : [
-                        _time(media.duration),
+                        videoTimecode(media.duration, media.fps),
                         '${media.width} × ${media.height}',
                         '${_number(media.fps)} fps',
                         if (_systemTrack != null) 'System audio',
@@ -584,14 +658,15 @@ class _VideoEditorState extends State<VideoEditor> {
                       ].join(' · '),
                 onMove: widget.onMoveWindow,
                 onUndo: _trim?.canUndo == true
-                    ? () => setState(_trim!.undo)
+                    ? () => _editTrim(_trim!.undo)
                     : null,
                 onRedo: _trim?.canRedo == true
-                    ? () => setState(_trim!.redo)
+                    ? () => _editTrim(_trim!.redo)
                     : null,
                 onFolder: () => unawaited(_showFolder(widget.path)),
                 onCopy: () => unawaited(_copyPath(widget.path)),
                 onShortcuts: _showShortcuts,
+                onSettings: _openSettings,
                 onClose: _requestClose,
               ),
               if (widget.warning case final warning?)
@@ -663,83 +738,81 @@ class _VideoEditorState extends State<VideoEditor> {
     final trim = _trim!;
     return Padding(
       padding: const .fromLTRB(24, 18, 24, 20),
-      child: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: AspectRatio(
-                  aspectRatio: media.width / media.height,
-                  child: ClipRRect(
-                    borderRadius: .circular(20),
-                    child: ColoredBox(
-                      color: colors.surfaceContainerLowest,
-                      child: Stack(
-                        fit: .expand,
-                        children: [
-                          if (video != null && error == null)
-                            Video(
-                              controller: video,
-                              controls: NoVideoControls,
-                              wakelock: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            crossAxisAlignment: .stretch,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: .circular(20),
+                  child: ColoredBox(
+                    color: colors.surfaceContainerLowest,
+                    child: Stack(
+                      fit: .expand,
+                      children: [
+                        if (video != null && error == null)
+                          Video(
+                            controller: video,
+                            controls: NoVideoControls,
+                            wakelock: false,
+                          ),
+                        if (error != null)
+                          Center(
+                            child: Padding(
+                              padding: const .all(20),
+                              child: Text('Preview unavailable. $error'),
                             ),
-                          if (error != null)
-                            Center(
-                              child: Padding(
-                                padding: const .all(20),
-                                child: Text('Preview unavailable. $error'),
-                              ),
-                            )
-                          else if (!_ready)
-                            const Center(child: CircularProgressIndicator()),
-                        ],
-                      ),
+                          )
+                        else if (!_ready)
+                          const Center(child: CircularProgressIndicator()),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
+              const SizedBox(height: 16),
+              _Transport(
+                position: _position,
+                playing: _playing,
+                range: trim.range,
+                fps: media.fps,
+                speed: _previewSpeed,
+                muted: _muted,
+                enabled: _ready,
+                onPlay: () => unawaited(_playPause()),
+                onStep: (forward) => unawaited(_step(forward: forward)),
+                onSpeed: _setSpeed,
+                onMute: _toggleMute,
+              ),
+              const SizedBox(height: 24),
+              _Timeline(
+                duration: media.duration,
+                fps: media.fps,
+                range: trim.range,
+                position: _position,
+                frames: _frames,
+                onReset: () => _editTrim(trim.reset),
+                onStartTrim: _startTrimDrag,
+                onTrim: _moveTrim,
+                onEndTrim: _finishTrimDrag,
+                onStartScrub: () {
+                  _scrubbing = true;
+                  final player = _player;
+                  if (player != null && _playing.value) {
+                    unawaited(_setPlayerOption(player.pause()));
+                  }
+                },
+                onScrub: _setScrubPosition,
+                onEndScrub: () {
+                  _scrubbing = false;
+                  unawaited(_seek(_position.value));
+                },
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: _Transport(
-              position: _position,
-              playing: _playing,
-              range: trim.range,
-              speed: _previewSpeed,
-              muted: _muted,
-              enabled: _ready,
-              onPlay: () => unawaited(_playPause()),
-              onSkip: (seconds) => unawaited(_skip(seconds)),
-              onSpeed: _setSpeed,
-              onMute: _toggleMute,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _Timeline(
-            duration: media.duration,
-            frameDuration: media.frameDuration,
-            range: trim.range,
-            position: _position,
-            frames: _frames,
-            onReset: () => setState(trim.reset),
-            onStartTrim: trim.startDrag,
-            onTrim: _moveTrim,
-            onEndTrim: _finishTrimDrag,
-            onStartScrub: () {
-              _scrubbing = true;
-              final player = _player;
-              if (player != null) unawaited(player.pause());
-            },
-            onScrub: (time) => _position.value = time,
-            onEndScrub: () {
-              _scrubbing = false;
-              unawaited(_seek(_position.value));
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -778,8 +851,7 @@ class _VideoEditorState extends State<VideoEditor> {
         title: const Text('Video editor shortcuts'),
         content: const Text(
           'Space   Play or pause\n'
-          '← / →   Jump 5 seconds\n'
-          ', / .   Step one frame\n'
+          '← / → or , / .   Step one frame\n'
           'I / O   Set the trim start or end\n'
           'Ctrl+Z   Undo trim\n'
           'Ctrl+Y   Redo trim\n'
@@ -802,18 +874,6 @@ String _number(num value) => value.toInt() == value
     ? value.toInt().toString()
     : value.toStringAsFixed(value * 10 == (value * 10).round() ? 1 : 2);
 
-String _time(Duration value, {bool fraction = true}) {
-  final hours = value.inHours;
-  final minutes = hours == 0 ? value.inMinutes : value.inMinutes.remainder(60);
-  final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
-  final tenths = value.inMilliseconds.remainder(1000) ~/ 100;
-  return [
-    if (hours != 0) hours.toString(),
-    minutes.toString().padLeft(2, '0'),
-    '$seconds${fraction ? '.$tenths' : ''}',
-  ].join(':');
-}
-
 class _EditorBar extends StatelessWidget {
   const _EditorBar({
     required this.title,
@@ -824,6 +884,7 @@ class _EditorBar extends StatelessWidget {
     required this.onFolder,
     required this.onCopy,
     required this.onShortcuts,
+    required this.onSettings,
     required this.onClose,
   });
 
@@ -835,6 +896,7 @@ class _EditorBar extends StatelessWidget {
   final VoidCallback onFolder;
   final VoidCallback onCopy;
   final VoidCallback onShortcuts;
+  final VoidCallback onSettings;
   final VoidCallback onClose;
 
   @override
@@ -916,6 +978,10 @@ class _EditorBar extends StatelessWidget {
                   PopupMenuItem(
                     value: onShortcuts,
                     child: const Text('Keyboard shortcuts'),
+                  ),
+                  PopupMenuItem(
+                    value: onSettings,
+                    child: const Text('Settings'),
                   ),
                 ],
               ),

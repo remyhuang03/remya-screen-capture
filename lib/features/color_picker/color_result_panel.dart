@@ -9,7 +9,6 @@ import '../capture_controls/capture_icon.dart';
 import '../capture_controls/capture_labels.dart';
 import 'color_adjustment.dart';
 import 'color_data.dart';
-import 'color_picker_preferences_dialog.dart';
 
 const _mono = TextStyle(
   fontFamily: 'JetBrains Mono',
@@ -29,10 +28,12 @@ class ColorResultPanel extends StatefulWidget {
     required this.onCopy,
     required this.onRemember,
     required this.onDelete,
-    required this.onPreferences,
+    required this.onOpenSettings,
     required this.onPickAgain,
     required this.onClose,
     required this.onHeightChanged,
+    required this.onDrag,
+    required this.onDragEnd,
   });
 
   static double preferredHeight(ColorPickerPreferences preferences) =>
@@ -48,10 +49,12 @@ class ColorResultPanel extends StatefulWidget {
   final Future<void> Function(String) onCopy;
   final Future<List<PickedColor>> Function(PickedColor) onRemember;
   final Future<List<PickedColor>> Function(PickedColor) onDelete;
-  final Future<void> Function(ColorPickerPreferences) onPreferences;
+  final Future<void> Function() onOpenSettings;
   final VoidCallback onPickAgain;
   final VoidCallback onClose;
   final ValueChanged<double> onHeightChanged;
+  final ValueChanged<Offset> onDrag;
+  final VoidCallback onDragEnd;
 
   @override
   State<ColorResultPanel> createState() => _ColorResultPanelState();
@@ -61,7 +64,7 @@ class _ColorResultPanelState extends State<ColorResultPanel> {
   final _focus = FocusNode(debugLabel: 'Color result');
   late var _picked = widget.picked;
   late var _history = widget.history;
-  late var _preferences = widget.preferences;
+  ColorPickerPreferences get _preferences => widget.preferences;
   late var _selected = _preferences.defaultFormat;
   late ColorFormat? _copied = widget.copied;
   late ColorFormat? _copiedRow = widget.copied;
@@ -171,25 +174,6 @@ class _ColorResultPanelState extends State<ColorResultPanel> {
     );
   }
 
-  Future<void> _settings() async {
-    final preferences = await showColorPickerPreferences(context, _preferences);
-    if (preferences == null || !mounted) return;
-    await _run(() async {
-      await widget.onPreferences(preferences);
-      if (!mounted) return;
-      setState(() {
-        _preferences = preferences;
-        _selected = preferences.defaultFormat;
-        _history = _history.take(preferences.historySize).toList();
-        _error = null;
-      });
-      if (!_adjusting) {
-        widget.onHeightChanged(ColorResultPanel.preferredHeight(preferences));
-      }
-      _focus.requestFocus();
-    });
-  }
-
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return .ignored;
     final key = event.logicalKey;
@@ -277,7 +261,11 @@ class _ColorResultPanelState extends State<ColorResultPanel> {
                           '${TimeOfDay.fromDateTime(_picked.time).format(context)}'
                     : 'Adjusting · HSL · live preview',
                 onClose: _busy ? null : widget.onClose,
-                onSettings: _busy || draft != null ? null : _settings,
+                onSettings: _busy || draft != null
+                    ? null
+                    : () => _run(widget.onOpenSettings),
+                onDrag: widget.onDrag,
+                onDragEnd: widget.onDragEnd,
               ),
               SizedBox(
                 height: draft == null
@@ -447,6 +435,8 @@ class _Header extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onClose,
+    required this.onDrag,
+    required this.onDragEnd,
     this.onSettings,
   });
 
@@ -454,6 +444,8 @@ class _Header extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onClose;
   final VoidCallback? onSettings;
+  final ValueChanged<Offset> onDrag;
+  final VoidCallback onDragEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -476,20 +468,35 @@ class _Header extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Column(
-            crossAxisAlignment: .start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: .w700),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.grab,
+            child: GestureDetector(
+              behavior: .opaque,
+              dragStartBehavior: .down,
+              onPanUpdate: (event) => onDrag(event.delta),
+              onPanEnd: (_) => onDragEnd(),
+              onPanCancel: onDragEnd,
+              child: Column(
+                crossAxisAlignment: .start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: .w700,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: .ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: .ellipsis,
-                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
-              ),
-            ],
+            ),
           ),
         ),
         if (onSettings != null)

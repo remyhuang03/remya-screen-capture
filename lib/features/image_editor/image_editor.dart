@@ -12,6 +12,7 @@ import '../capture_controls/capture_icon.dart';
 import '../capture_controls/capture_labels.dart';
 import '../capture_controls/capture_slider.dart';
 import '../capture_controls/capture_swatch.dart';
+import '../settings/open_settings.dart';
 
 part 'editor_document.dart';
 part 'editor_fonts.dart';
@@ -54,12 +55,15 @@ class _ImageEditorState extends State<ImageEditor> {
     widget.image.width.toDouble(),
     widget.image.height.toDouble(),
   );
-  late final _history = [_Document(_sourceBounds)];
-  late _Document _saved = _history.first;
+  late final _history = <({_Document document, int? placedCounter})>[
+    (document: _Document(_sourceBounds), placedCounter: null),
+  ];
+  late _Document _saved = _history.first.document;
   late String _name = widget.initialName;
   final _styles = {for (final tool in _Tool.values) tool: _Style.forTool(tool)};
   final _recent = <Color>[];
   int _revision = 0;
+  int _nextCounter = 1;
   int? _selected;
   int? _editingText;
   int? _styleGestureRevision;
@@ -79,7 +83,7 @@ class _ImageEditorState extends State<ImageEditor> {
   _View? _pinchView;
   Offset _pan = Offset.zero;
 
-  _Document get _document => _history[_revision];
+  _Document get _document => _history[_revision].document;
   _Annotation? get _selection {
     final index = _selected;
     return index == null || index >= _document.objects.length
@@ -120,13 +124,20 @@ class _ImageEditorState extends State<ImageEditor> {
     super.dispose();
   }
 
-  void _commit(_Document document, {bool coalesce = false}) {
+  void _commit(
+    _Document document, {
+    bool coalesce = false,
+    int? placedCounter,
+  }) {
     if (coalesce) {
-      _history[_revision] = document;
+      _history[_revision] = (
+        document: document,
+        placedCounter: _history[_revision].placedCounter,
+      );
       return;
     }
     _history.removeRange(_revision + 1, _history.length);
-    _history.add(document);
+    _history.add((document: document, placedCounter: placedCounter));
     _revision++;
   }
 
@@ -134,6 +145,10 @@ class _ImageEditorState extends State<ImageEditor> {
     final next = _revision + delta;
     if (next < 0 || next >= _history.length) return;
     setState(() {
+      final edit = _history[delta < 0 ? _revision : next];
+      if (edit.placedCounter case final int number) {
+        _nextCounter = number + (delta > 0 ? 1 : 0);
+      }
       _revision = next;
       _selected = null;
       if (_crop != null) _crop = _document.crop;
@@ -168,10 +183,9 @@ class _ImageEditorState extends State<ImageEditor> {
     });
   }
 
-  void _add(_Annotation annotation, {_Style? nextStyle}) {
+  void _add(_Annotation annotation, {int? placedCounter}) {
     final objects = [..._document.objects, annotation];
-    _commit(_Document(_document.crop, objects));
-    if (nextStyle != null) _styles[annotation.tool] = nextStyle;
+    _commit(_Document(_document.crop, objects), placedCounter: placedCounter);
   }
 
   void _replace(int index, _Annotation annotation, {bool coalesce = false}) {
@@ -199,9 +213,7 @@ class _ImageEditorState extends State<ImageEditor> {
   }
 
   void _resetCounter() {
-    setState(() {
-      _styles[_Tool.counter] = _styles[_Tool.counter]!.copyWith(number: 1);
-    });
+    setState(() => _nextCounter = 1);
   }
 
   void _changeCropRatio(_CropRatio ratio) {
@@ -501,6 +513,20 @@ class _ImageEditorState extends State<ImageEditor> {
     return null;
   }
 
+  ({Alignment? handle, bool create})? _cropTarget(
+    Offset point,
+    double tolerance,
+  ) {
+    final crop = _crop!;
+    if (!_document.crop.inflate(tolerance).contains(point)) return null;
+    final handle = _nearestHandle(crop, point, tolerance);
+    return (
+      handle: handle,
+      create:
+          handle == null && (crop == _document.crop || !crop.contains(point)),
+    );
+  }
+
   void _pointerDown(PointerDownEvent event, _View view) {
     if (_drag != null) return;
     final screen = event.localPosition;
@@ -510,7 +536,7 @@ class _ImageEditorState extends State<ImageEditor> {
             HardwareKeyboard.instance.isLogicalKeyPressed(
               LogicalKeyboardKey.space,
             ))) {
-      _drag = _Drag(event.pointer, screen, pan: view.pan);
+      setState(() => _drag = _Drag(event.pointer, screen, pan: view.pan));
       return;
     }
     if (event.buttons != kPrimaryButton) return;
@@ -518,18 +544,18 @@ class _ImageEditorState extends State<ImageEditor> {
     _focus.requestFocus();
     final tolerance = 9 / view.scale;
     if (_tool == .crop) {
-      if (!_document.crop.inflate(tolerance).contains(point)) return;
-      final crop = _crop!;
-      final handle = _nearestHandle(crop, point, tolerance);
+      final target = _cropTarget(point, tolerance);
+      if (target == null) return;
       final start = _clampPoint(point, _document.crop);
-      _drag = _Drag(
-        event.pointer,
-        start,
-        rect: crop,
-        handle: handle,
-        createCrop:
-            handle == null && (crop == _document.crop || !crop.contains(point)),
-      );
+      setState(() {
+        _drag = _Drag(
+          event.pointer,
+          start,
+          rect: _crop,
+          handle: target.handle,
+          createCrop: target.create,
+        );
+      });
       return;
     }
     if (!_document.crop.contains(point)) return;
@@ -569,10 +595,10 @@ class _ImageEditorState extends State<ImageEditor> {
           }
         case .counter:
           _selected = null;
-          final style = _style;
+          final number = _nextCounter++;
           _add(
-            _Annotation(.counter, [point], style),
-            nextStyle: style.copyWith(number: style.number + 1),
+            _Annotation(.counter, [point], _style.copyWith(number: number)),
+            placedCounter: number,
           );
         default:
           _selected = null;
@@ -585,7 +611,9 @@ class _ImageEditorState extends State<ImageEditor> {
 
   void _pointerMove(PointerMoveEvent event, _View view) {
     final screen = event.localPosition;
-    _cursor.value = screen;
+    if (_tool.hasPreviewCursor || event.kind == .mouse) {
+      _cursor.value = screen;
+    }
     final drag = _drag;
     if (drag == null || drag.pointer != event.pointer) return;
     if (drag.pan case final Offset pan) {
@@ -681,7 +709,7 @@ class _ImageEditorState extends State<ImageEditor> {
 
   Widget _buildWorkspace(_View view) {
     final colors = Theme.of(context).colorScheme;
-    final brush = _tool.hasBrushCursor;
+    final previewCursor = _tool.hasPreviewCursor;
     final visibleImage = view.visibleImage;
     final overflow = view.overflow;
     return Stack(
@@ -689,7 +717,7 @@ class _ImageEditorState extends State<ImageEditor> {
       children: [
         Positioned.fromRect(
           rect: Offset.zero & view.size,
-          child: _canvas(view, colors, brush, visibleImage),
+          child: _canvas(view, colors, previewCursor, visibleImage),
         ),
         if (_textOrigin case final Offset origin when !visibleImage.isEmpty)
           _textField(view, origin),
@@ -744,22 +772,64 @@ class _ImageEditorState extends State<ImageEditor> {
     );
   }
 
+  MouseCursor _workspaceCursor(_View view, Offset? position) {
+    final drag = _drag;
+    if (drag?.pan != null) return SystemMouseCursors.grabbing;
+    if (_tool == .text) return SystemMouseCursors.text;
+    if (_tool.hasPreviewCursor) return SystemMouseCursors.basic;
+    if (_tool != .move && _tool != .crop) return SystemMouseCursors.precise;
+    if (position == null) return SystemMouseCursors.basic;
+    final point = view.toImage(position);
+    final tolerance = 9 / view.scale;
+    if (_tool == .move) {
+      if (drag?.object != null && drag?.handle == null) {
+        return SystemMouseCursors.grabbing;
+      }
+      final selection = _selection;
+      final canDrag =
+          view.crop.contains(point) &&
+          (selection == null ||
+              _nearestHandle(selection.bounds, point, tolerance) == null);
+      return canDrag ? SystemMouseCursors.grab : SystemMouseCursors.basic;
+    }
+    if (drag?.rect != null) {
+      if (drag!.handle != null) return SystemMouseCursors.basic;
+      return drag.createCrop
+          ? SystemMouseCursors.precise
+          : SystemMouseCursors.grabbing;
+    }
+    return switch (_cropTarget(point, tolerance)) {
+      null || (handle: Alignment(), create: _) => SystemMouseCursors.basic,
+      (handle: null, create: true) => SystemMouseCursors.precise,
+      (handle: null, create: false) => SystemMouseCursors.grab,
+    };
+  }
+
+  Widget _pointerRegion(_View view, Widget child) {
+    MouseRegion region(Offset? position, Widget child) => MouseRegion(
+      cursor: _workspaceCursor(view, position),
+      onEnter: (event) => _cursor.value = event.localPosition,
+      onHover: (event) => _cursor.value = event.localPosition,
+      onExit: (_) => _cursor.value = null,
+      child: child,
+    );
+
+    if (_tool != .move && _tool != .crop) return region(_cursor.value, child);
+    return ValueListenableBuilder(
+      valueListenable: _cursor,
+      child: child,
+      builder: (context, position, child) => region(position, child!),
+    );
+  }
+
   Widget _canvas(
     _View view,
     ColorScheme colors,
-    bool brush,
+    bool previewCursor,
     Rect visibleImage,
-  ) => MouseRegion(
-    cursor: switch (_tool) {
-      .move => SystemMouseCursors.basic,
-      .text => SystemMouseCursors.text,
-      _ when brush => SystemMouseCursors.basic,
-      _ => SystemMouseCursors.precise,
-    },
-    onEnter: (event) => _cursor.value = event.localPosition,
-    onHover: (event) => _cursor.value = event.localPosition,
-    onExit: (_) => _cursor.value = null,
-    child: Listener(
+  ) => _pointerRegion(
+    view,
+    Listener(
       behavior: .opaque,
       onPointerDown: (event) => _pointerDown(event, view),
       onPointerMove: (event) => _pointerMove(event, view),
@@ -808,22 +878,25 @@ class _ImageEditorState extends State<ImageEditor> {
               crop: _crop,
             ),
           ),
-          if (brush && !visibleImage.isEmpty)
+          if (previewCursor && !visibleImage.isEmpty)
             Positioned.fromRect(
               rect: visibleImage,
               child: const MouseRegion(cursor: SystemMouseCursors.none),
             ),
-          if (brush && (_draft == null || (_tool == .mosaic && !_style.brush)))
+          if (previewCursor &&
+              (_draft == null || (_tool == .mosaic && !_style.brush)))
             Positioned.fill(
               child: IgnorePointer(
                 child: RepaintBoundary(
                   child: CustomPaint(
-                    painter: _BrushCursor(
+                    painter: _ToolCursor(
                       _cursor,
                       view,
                       _renderer,
                       _tool,
-                      _styles[_tool]!,
+                      _tool == .counter
+                          ? _styles[_tool]!.copyWith(number: _nextCounter)
+                          : _styles[_tool]!,
                       colors.onSurface,
                     ),
                   ),

@@ -8,6 +8,8 @@ import 'package:remya_client/remya_client.dart';
 
 import '../screenshot/capture_geometry.dart';
 
+part 'recording_audio.dart';
+
 class RecordingOptions {
   const RecordingOptions({
     this.systemAudio = true,
@@ -131,12 +133,14 @@ class RecordingResult {
     required this.path,
     required this.systemAudio,
     required this.microphone,
+    this.microphoneAudioSlot,
     this.warning,
   });
 
   final String path;
   final bool systemAudio;
   final bool microphone;
+  final int? microphoneAudioSlot;
   final String? warning;
 }
 
@@ -163,6 +167,7 @@ class RecordingRun {
     this._runtime,
     this._launch,
     this.options,
+    this._audio,
   ) {
     _process.stdin.close().ignore();
     final stdout = _process.stdout.listen((_) {});
@@ -198,6 +203,7 @@ class RecordingRun {
   final Directory _runtime;
   final RecordingProcessLauncher _launch;
   final RecordingOptions options;
+  final _RecordingAudio? _audio;
   final Stopwatch _clock = Stopwatch();
   late final Future<int> _exit;
   Future<RecordingResult>? _stop;
@@ -212,8 +218,10 @@ class RecordingRun {
   File get _video => File('${_staging.path}/recording.mkv');
   bool get paused => _firstFrame != null && !_clock.isRunning;
   Duration get elapsed => _initialElapsed + _clock.elapsed;
-  bool get systemAudio => options.systemAudio;
-  bool get microphone => options.microphone;
+  bool get systemAudio => _audio?.system.enabled ?? options.systemAudio;
+  bool get microphone => _audio?.mic.enabled ?? options.microphone;
+  bool get canToggleSystemAudio => _audio?.system.available ?? false;
+  bool get canToggleMicrophone => _audio?.mic.available ?? false;
 
   /// Also completes if the process exits without a stop request.
   late final Future<RecordingResult> finished = _exit.then(_finalize);
@@ -261,8 +269,11 @@ class RecordingRun {
     final staging = await parent.createTemp('.remya-recording-');
     Directory? runtime;
     RecordingRun? run;
+    _RecordingAudio? audio;
     try {
       runtime = await Directory(runtimePath).createTemp('remya-gsr-');
+      if (cancelled) throw const RecordingStartCancelled();
+      audio = await _RecordingAudio.tryStart(launch, runtime, options);
       if (cancelled) throw const RecordingStartCancelled();
       final process = await launch('gpu-screen-recorder', [
         ...captureArguments,
@@ -276,8 +287,15 @@ class RecordingRun {
         'yes',
         '-ac',
         'aac',
-        if (options.systemAudio) ...['-a', 'default_output'],
-        if (options.microphone) ...['-a', 'default_input'],
+        if (audio != null) ...[
+          '-a',
+          audio.system.name,
+          '-a',
+          audio.mic.name,
+        ] else ...[
+          if (options.systemAudio) ...['-a', 'default_output'],
+          if (options.microphone) ...['-a', 'default_input'],
+        ],
         '-cursor',
         options.cursor ? 'yes' : 'no',
         '-exclude-metadata',
@@ -291,7 +309,7 @@ class RecordingRun {
         '-o',
         '${staging.path}/recording.mkv',
       ]);
-      run = RecordingRun._(process, staging, runtime, launch, options);
+      run = RecordingRun._(process, staging, runtime, launch, options, audio);
       await run._waitForFirstFrame(() => cancelled);
       return run;
     } on ProcessException catch (error) {
@@ -312,6 +330,7 @@ class RecordingRun {
       rethrow;
     } finally {
       if (run == null || run._firstFrame == null) {
+        await audio?.close();
         await _removeDirectory(runtime);
         if (run == null || !await run._mightHaveVideo()) {
           await _removeDirectory(staging);
@@ -365,21 +384,32 @@ class RecordingRun {
     }
   }
 
-  Future<void> setPaused(bool value) {
+  Future<void> setSystemAudio(bool value) =>
+      _control(() => _audio!.system.setEnabled(value));
+
+  Future<void> setMicrophone(bool value) =>
+      _control(() => _audio!.mic.setEnabled(value));
+
+  Future<void> setPaused(bool value) => _control(() async {
+    if (paused == value) return;
+    await _checked(_launch, 'gsr-cli', [
+      '-ipc',
+      _socket,
+      'set-paused',
+      '$value',
+    ]);
+    if (_exitCode != null) return;
+    if (value) {
+      _clock.stop();
+    } else {
+      _clock.start();
+    }
+  });
+
+  Future<void> _control(Future<void> Function() action) {
     final request = _controls.then((_) async {
-      if (_stop != null || _exitCode != null || paused == value) return;
-      await _checked(_launch, 'gsr-cli', [
-        '-ipc',
-        _socket,
-        'set-paused',
-        '$value',
-      ]);
-      if (_exitCode != null) return;
-      if (value) {
-        _clock.stop();
-      } else {
-        _clock.start();
-      }
+      if (_stop != null || _exitCode != null) return;
+      await action();
     });
     _controls = request.then((_) {}, onError: (Object _, StackTrace _) {});
     return request;
@@ -431,6 +461,8 @@ class RecordingRun {
   }
 
   Future<RecordingResult> _finalize(int exitCode) async {
+    await _controls;
+    await _audio?.close();
     final warnings = [
       ?_stopWarning,
       if (_stop == null || exitCode != 0)
@@ -469,16 +501,20 @@ class RecordingRun {
       final tracks = streams
           .where((stream) => stream['codec_type'] == 'audio')
           .length;
-      final expected =
-          (options.systemAudio ? 1 : 0) + (options.microphone ? 1 : 0);
+      final expected = _audio != null
+          ? 2
+          : (options.systemAudio ? 1 : 0) + (options.microphone ? 1 : 0);
       if (tracks != expected) {
         warnings.add(
           'The recorder produced $tracks of $expected requested audio tracks.',
         );
       }
       // GSR adds one stream per -a, in argument order, including silent devices.
-      final systemAudio = options.systemAudio && tracks == expected;
-      final microphone = options.microphone && tracks == expected;
+      final systemAudio =
+          (_audio?.system.wasEnabled ?? options.systemAudio) &&
+          tracks == expected;
+      final microphone =
+          (_audio?.mic.wasEnabled ?? options.microphone) && tracks == expected;
       final file = await _video.open(mode: .append);
       try {
         await file.flush();
@@ -490,6 +526,7 @@ class RecordingRun {
         path: path,
         systemAudio: systemAudio,
         microphone: microphone,
+        microphoneAudioSlot: _audio == null ? null : 1,
         warning: warnings.isEmpty ? null : warnings.join(' '),
       );
     } catch (error) {
@@ -533,13 +570,7 @@ class RecordingRun {
     RecordingOptions options,
   ) async {
     if (!options.systemAudio && !options.microphone) return;
-    final result = await _checked(launch, 'gpu-screen-recorder', [
-      '--list-audio-devices',
-    ]);
-    final devices = const LineSplitter()
-        .convert(result.stdout)
-        .map((line) => line.split('|').first.trim())
-        .toSet();
+    final devices = await _listAudioDevices(launch);
     final unavailable = [
       if (options.systemAudio && !devices.contains('default_output'))
         'system audio',
@@ -552,6 +583,16 @@ class RecordingRun {
       );
     }
   }
+}
+
+Future<Set<String>> _listAudioDevices(RecordingProcessLauncher launch) async {
+  final result = await _checked(launch, 'gpu-screen-recorder', [
+    '--list-audio-devices',
+  ]);
+  return const LineSplitter()
+      .convert(result.stdout)
+      .map((line) => line.split('|').first.trim())
+      .toSet();
 }
 
 typedef _CommandResult = ({int exitCode, String stdout, String stderr});

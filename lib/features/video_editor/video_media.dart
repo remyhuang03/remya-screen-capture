@@ -106,6 +106,19 @@ enum VideoFormat {
 typedef VideoRange = ({Duration start, Duration end});
 typedef VideoSize = ({int width, int height});
 
+String videoTimecode(Duration position, double fps) {
+  final nominalFps = math.max(1, fps.round());
+  final frames =
+      (position.inMicroseconds * fps / Duration.microsecondsPerSecond).round();
+  final clock = Duration(seconds: frames ~/ nominalFps);
+  return [
+    clock.inHours,
+    clock.inMinutes.remainder(60),
+    clock.inSeconds.remainder(60),
+    frames.remainder(nominalFps),
+  ].map((part) => part.toString().padLeft(2, '0')).join(':');
+}
+
 class VideoExportSettings {
   const VideoExportSettings({
     required this.format,
@@ -445,6 +458,9 @@ class VideoTrim {
 
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
+
+  Duration clampPosition(Duration position) =>
+      _boundTime(position, range.start, range.end);
 
   void startDrag() => _beforeDrag ??= range;
 

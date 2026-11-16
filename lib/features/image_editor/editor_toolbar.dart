@@ -249,6 +249,18 @@ class _EditorMenu extends StatelessWidget {
         onPressed: () => _showShortcuts(context),
         child: const Text('Keyboard shortcuts'),
       ),
+      MenuItemButton(
+        onPressed: () async {
+          try {
+            await openCaptureSettings();
+          } catch (error) {
+            if (editor.mounted) {
+              editor._notify('Could not open settings. $error');
+            }
+          }
+        },
+        child: const Text('Settings'),
+      ),
     ],
     builder: (context, menu, child) => CaptureIconButton(
       icon: .more,
@@ -411,7 +423,7 @@ class _ToolOptions extends StatelessWidget {
                 ),
                 child: Padding(
                   padding: const .symmetric(horizontal: 12, vertical: 8),
-                  child: Text('Next  ${editor._styles[_Tool.counter]!.number}'),
+                  child: Text('Next  ${editor._nextCounter}'),
                 ),
               ),
               CaptureButton(

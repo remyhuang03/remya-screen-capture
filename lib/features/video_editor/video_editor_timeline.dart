@@ -7,11 +7,12 @@ class _Transport extends StatelessWidget {
     required this.position,
     required this.playing,
     required this.range,
+    required this.fps,
     required this.speed,
     required this.muted,
     required this.enabled,
     required this.onPlay,
-    required this.onSkip,
+    required this.onStep,
     required this.onSpeed,
     required this.onMute,
   });
@@ -19,11 +20,12 @@ class _Transport extends StatelessWidget {
   final ValueListenable<Duration> position;
   final ValueListenable<bool> playing;
   final VideoRange range;
+  final double fps;
   final double speed;
   final bool muted;
   final bool enabled;
   final VoidCallback onPlay;
-  final ValueChanged<int> onSkip;
+  final ValueChanged<bool> onStep;
   final ValueChanged<double> onSpeed;
   final VoidCallback onMute;
 
@@ -33,16 +35,16 @@ class _Transport extends StatelessWidget {
     final colors = theme.colorScheme;
     return LayoutBuilder(
       builder: (context, bounds) {
-        final compact = bounds.maxWidth < 450;
+        final compact = bounds.maxWidth < 530;
         final playback = Row(
           mainAxisSize: .min,
           spacing: compact ? 2 : 8,
           children: [
             CaptureIconButton(
-              icon: .replay5,
-              label: 'Back 5 seconds',
+              icon: .previousFrame,
+              label: 'Previous frame',
               shortcut: '←',
-              onPressed: enabled ? () => onSkip(-5) : null,
+              onPressed: enabled ? () => onStep(false) : null,
             ),
             ValueListenableBuilder(
               valueListenable: playing,
@@ -72,17 +74,18 @@ class _Transport extends StatelessWidget {
               ),
             ),
             CaptureIconButton(
-              icon: .forward5,
-              label: 'Forward 5 seconds',
+              icon: .nextFrame,
+              label: 'Next frame',
               shortcut: '→',
-              onPressed: enabled ? () => onSkip(5) : null,
+              onPressed: enabled ? () => onStep(true) : null,
             ),
           ],
         );
         final clock = ValueListenableBuilder(
           valueListenable: position,
           builder: (context, value, _) => Text(
-            '${_time(value)} / ${_time(range.end - range.start)}',
+            '${videoTimecode(value - range.start, fps)} / '
+            '${videoTimecode(range.end - range.start, fps)}',
             maxLines: 1,
             overflow: .ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -182,10 +185,12 @@ class _SpeedMenu extends StatelessWidget {
   }
 }
 
+const _trimHandleWidth = 16.0;
+
 class _Timeline extends StatelessWidget {
   const _Timeline({
     required this.duration,
-    required this.frameDuration,
+    required this.fps,
     required this.range,
     required this.position,
     required this.frames,
@@ -199,7 +204,7 @@ class _Timeline extends StatelessWidget {
   });
 
   final Duration duration;
-  final Duration frameDuration;
+  final double fps;
   final VideoRange range;
   final ValueListenable<Duration> position;
   final List<Uint8List?> frames;
@@ -215,8 +220,12 @@ class _Timeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final frameDuration = Duration(
+      microseconds: (Duration.microsecondsPerSecond / fps).round(),
+    );
+    final minimum = frameDuration > duration ? duration : frameDuration;
     return Container(
-      padding: const .fromLTRB(24, 4, 24, 12),
+      padding: const .fromLTRB(16, 4, 16, 12),
       decoration: BoxDecoration(
         color: colors.surfaceContainer,
         borderRadius: .circular(24),
@@ -224,35 +233,41 @@ class _Timeline extends StatelessWidget {
       child: Column(
         mainAxisSize: .min,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Symbols.content_cut_rounded,
-                size: 16,
-                weight: captureIconWeight,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Trim ${_time(range.start)} – ${_time(range.end)} · ${_time(range.end - range.start)}',
-                  maxLines: 1,
-                  overflow: .ellipsis,
-                  style: theme.textTheme.bodySmall,
+          Padding(
+            padding: const .only(left: _trimHandleWidth),
+            child: Row(
+              children: [
+                const Icon(
+                  Symbols.content_cut_rounded,
+                  size: 16,
+                  weight: captureIconWeight,
                 ),
-              ),
-              CaptureButton(
-                label: 'Reset trim',
-                icon: const CaptureIcon(.undo),
-                variant: .text,
-                onPressed: range.start != Duration.zero || range.end != duration
-                    ? onReset
-                    : null,
-              ),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Trim ${videoTimecode(range.start, fps)} – '
+                    '${videoTimecode(range.end, fps)} · '
+                    '${videoTimecode(range.end - range.start, fps)}',
+                    maxLines: 1,
+                    overflow: .ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                TextButton.icon(
+                  label: const Text('Reset trim'),
+                  icon: const CaptureIcon(.undo),
+                  style: TextButton.styleFrom(padding: const .only(left: 12)),
+                  onPressed:
+                      range.start != Duration.zero || range.end != duration
+                      ? onReset
+                      : null,
+                ),
+              ],
+            ),
           ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final width = constraints.maxWidth;
+              final width = constraints.maxWidth - 2 * _trimHandleWidth;
               double x(Duration time) =>
                   width *
                   (time.inMicroseconds / duration.inMicroseconds).clamp(
@@ -263,19 +278,17 @@ class _Timeline extends StatelessWidget {
                   duration * (dx / width).clamp(0.0, 1.0);
               final start = x(range.start);
               final end = x(range.end);
-              final handleCenter = (start + end) / 2;
-              final startHandle = math.min(start - 8, handleCenter - 16);
-              final endHandle = math.max(end - 8, handleCenter);
               final trackColor = colors.surfaceContainerLowest;
               return Column(
                 children: [
                   SizedBox(
-                    height: 70,
+                    height: 80,
                     child: Stack(
                       clipBehavior: .none,
                       children: [
                         Positioned.fill(
-                          top: 3,
+                          left: _trimHandleWidth,
+                          right: _trimHandleWidth,
                           bottom: 3,
                           child: Semantics(
                             slider: true,
@@ -305,25 +318,28 @@ class _Timeline extends StatelessWidget {
                                   onScrub(time(event.localPosition.dx)),
                               onHorizontalDragEnd: (_) => onEndScrub(),
                               onHorizontalDragCancel: onEndScrub,
-                              child: ClipRRect(
-                                borderRadius: .circular(8),
-                                child: ColoredBox(
-                                  color: trackColor,
-                                  child: Row(
-                                    crossAxisAlignment: .stretch,
-                                    children: [
-                                      for (final frame in frames)
-                                        Expanded(
-                                          child: frame == null
-                                              ? const SizedBox()
-                                              : Image.memory(
-                                                  frame,
-                                                  fit: .cover,
-                                                  gaplessPlayback: true,
-                                                  excludeFromSemantics: true,
-                                                ),
-                                        ),
-                                    ],
+                              child: Padding(
+                                padding: const .only(top: 13),
+                                child: ClipRRect(
+                                  borderRadius: .circular(8),
+                                  child: ColoredBox(
+                                    color: trackColor,
+                                    child: Row(
+                                      crossAxisAlignment: .stretch,
+                                      children: [
+                                        for (final frame in frames)
+                                          Expanded(
+                                            child: frame == null
+                                                ? const SizedBox()
+                                                : Image.memory(
+                                                    frame,
+                                                    fit: .cover,
+                                                    gaplessPlayback: true,
+                                                    excludeFromSemantics: true,
+                                                  ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -332,9 +348,9 @@ class _Timeline extends StatelessWidget {
                         ),
                         _TrimShade(start: start, end: end, width: width),
                         Positioned(
-                          left: start,
+                          left: _trimHandleWidth + start,
                           width: math.max(0, end - start),
-                          top: 0,
+                          top: 10,
                           bottom: 0,
                           child: IgnorePointer(
                             child: DecoratedBox(
@@ -351,15 +367,22 @@ class _Timeline extends StatelessWidget {
                         ),
                         for (final isStart in [true, false])
                           Positioned(
-                            left: (isStart ? startHandle : endHandle).clamp(
-                              -4.0,
-                              math.max(-4.0, width - 12),
-                            ),
-                            top: 0,
+                            left: isStart ? start : _trimHandleWidth + end,
+                            top: 10,
                             bottom: 0,
                             child: _TrimHandle(
                               start: isStart,
                               time: isStart ? range.start : range.end,
+                              limits: isStart
+                                  ? (
+                                      start: Duration.zero,
+                                      end: range.end - minimum,
+                                    )
+                                  : (
+                                      start: range.start + minimum,
+                                      end: duration,
+                                    ),
+                              fps: fps,
                               frameDuration: frameDuration,
                               microsPerPixel: duration.inMicroseconds / width,
                               onStart: onStartTrim,
@@ -370,16 +393,23 @@ class _Timeline extends StatelessWidget {
                         ValueListenableBuilder(
                           valueListenable: position,
                           builder: (context, value, _) => _Playhead(
-                            x: x(value),
-                            width: width,
-                            label: _time(value),
+                            x: _trimHandleWidth + x(value),
+                            width: constraints.maxWidth,
+                            label: videoTimecode(value, fps),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _TimelineTicks(duration: duration, width: width),
+                  Padding(
+                    padding: const .symmetric(horizontal: _trimHandleWidth),
+                    child: _TimelineTicks(
+                      duration: duration,
+                      width: width,
+                      fps: fps,
+                    ),
+                  ),
                 ],
               );
             },
@@ -405,7 +435,9 @@ class _TrimShade extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.scrim.withValues(alpha: 0.58);
     return Positioned.fill(
-      top: 3,
+      left: _trimHandleWidth,
+      right: _trimHandleWidth,
+      top: 13,
       bottom: 3,
       child: IgnorePointer(
         child: ClipRRect(
@@ -435,6 +467,8 @@ class _TrimHandle extends StatefulWidget {
   const _TrimHandle({
     required this.start,
     required this.time,
+    required this.limits,
+    required this.fps,
     required this.frameDuration,
     required this.microsPerPixel,
     required this.onStart,
@@ -444,6 +478,8 @@ class _TrimHandle extends StatefulWidget {
 
   final bool start;
   final Duration time;
+  final VideoRange limits;
+  final double fps;
   final Duration frameDuration;
   final double microsPerPixel;
   final VoidCallback onStart;
@@ -459,28 +495,43 @@ class _TrimHandleState extends State<_TrimHandle> {
   double _delta = 0;
   bool _focused = false;
 
-  void _nudge(int frames) =>
-      widget.onChange(widget.time + widget.frameDuration * frames);
+  Duration _nudgeTime(int frames) => Duration(
+    microseconds: (widget.time + widget.frameDuration * frames).inMicroseconds
+        .clamp(
+          widget.limits.start.inMicroseconds,
+          widget.limits.end.inMicroseconds,
+        ),
+  );
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final previous = _nudgeTime(-1);
+    final next = _nudgeTime(1);
     return Semantics(
       slider: true,
       label: widget.start ? 'Trim start' : 'Trim end',
-      value: _time(widget.time),
-      onIncrease: () => _nudge(1),
-      onDecrease: () => _nudge(-1),
+      value: videoTimecode(widget.time, widget.fps),
+      increasedValue: next == widget.time
+          ? null
+          : videoTimecode(next, widget.fps),
+      decreasedValue: previous == widget.time
+          ? null
+          : videoTimecode(previous, widget.fps),
+      onIncrease: next == widget.time ? null : () => widget.onChange(next),
+      onDecrease: previous == widget.time
+          ? null
+          : () => widget.onChange(previous),
       child: Focus(
         onFocusChange: (focused) => setState(() => _focused = focused),
         onKeyEvent: (node, event) {
           if (event is KeyUpEvent) return .ignored;
           if (event.logicalKey == .arrowLeft) {
-            _nudge(-1);
+            widget.onChange(previous);
             return .handled;
           }
           if (event.logicalKey == .arrowRight) {
-            _nudge(1);
+            widget.onChange(next);
             return .handled;
           }
           return .ignored;
@@ -506,7 +557,7 @@ class _TrimHandleState extends State<_TrimHandle> {
             onHorizontalDragEnd: (_) => widget.onEnd(),
             onHorizontalDragCancel: widget.onEnd,
             child: Container(
-              width: 16,
+              width: _trimHandleWidth,
               alignment: .center,
               decoration: BoxDecoration(
                 color: colors.primary,
@@ -542,6 +593,7 @@ class _Playhead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const labelWidth = 112.0;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     return Positioned.fill(
@@ -551,14 +603,14 @@ class _Playhead extends StatelessWidget {
           children: [
             Positioned(
               left: x - 1,
-              top: -3,
+              top: 7,
               bottom: -5,
               width: 2,
               child: ColoredBox(color: colors.onSurface),
             ),
             Positioned(
               left: x - 6,
-              top: -10,
+              top: 0,
               child: Icon(
                 Symbols.circle_rounded,
                 size: 12,
@@ -568,9 +620,12 @@ class _Playhead extends StatelessWidget {
               ),
             ),
             Positioned(
-              left: (x - 38).clamp(0.0, math.max(0.0, width - 76)),
-              top: 6,
-              width: 76,
+              left: (x - labelWidth / 2).clamp(
+                0.0,
+                math.max(0.0, width - labelWidth),
+              ),
+              top: 16,
+              width: labelWidth,
               child: Align(
                 alignment: .center,
                 child: Container(
@@ -581,6 +636,8 @@ class _Playhead extends StatelessWidget {
                   ),
                   child: Text(
                     label,
+                    maxLines: 1,
+                    softWrap: false,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colors.onInverseSurface,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -597,10 +654,15 @@ class _Playhead extends StatelessWidget {
 }
 
 class _TimelineTicks extends StatelessWidget {
-  const _TimelineTicks({required this.duration, required this.width});
+  const _TimelineTicks({
+    required this.duration,
+    required this.width,
+    required this.fps,
+  });
 
   final Duration duration;
   final double width;
+  final double fps;
 
   @override
   Widget build(BuildContext context) {
@@ -619,10 +681,10 @@ class _TimelineTicks extends StatelessWidget {
             Positioned(
               left: (width * at / seconds).clamp(
                 0.0,
-                math.max(0.0, width - 52),
+                math.max(0.0, width - 74),
               ),
               child: Text(
-                _time(Duration(seconds: at), fraction: false),
+                videoTimecode(Duration(seconds: at), fps),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

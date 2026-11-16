@@ -57,8 +57,8 @@ enum CaptureSymbol {
   speed(Symbols.speed_rounded),
   movie(Symbols.movie_rounded),
   folder(Symbols.folder_open_rounded),
-  replay5(Symbols.replay_5_rounded),
-  forward5(Symbols.forward_5_rounded),
+  previousFrame(Symbols.skip_previous_rounded, fill: 1),
+  nextFrame(Symbols.skip_next_rounded, fill: 1),
   move(Symbols.open_with_rounded),
   add(Symbols.add_rounded);
 

@@ -326,7 +326,7 @@ void main() {
   });
 
   testWidgets(
-    'Pen, highlighter and mosaic replace the pointer over the image',
+    'Pen, highlighter, mosaic and counter replace the pointer over the image',
     (tester) async {
       await _open(tester, image: _testImage(), onCopy: (_) async {});
       const device = 42;
@@ -341,6 +341,7 @@ void main() {
         LogicalKeyboardKey.keyP,
         LogicalKeyboardKey.keyH,
         LogicalKeyboardKey.keyM,
+        LogicalKeyboardKey.keyN,
       ]) {
         await _press(tester, key);
         expect(
@@ -359,6 +360,80 @@ void main() {
       await mouse.removePointer();
     },
   );
+
+  testWidgets('Counter preview matches the marker and follows undo and redo', (
+    tester,
+  ) async {
+    await _open(tester, image: _testImage(), onCopy: (_) async {});
+    await _press(tester, LogicalKeyboardKey.keyN);
+    final marker = _sourceOrigin + const Offset(40, 40);
+    final mouse = await tester.createGesture(kind: .mouse);
+    await mouse.addPointer(location: marker);
+    await tester.pump();
+    final preview = await _annotationInk(tester);
+    expect(preview, isNotEmpty);
+
+    await mouse.down(marker);
+    await mouse.up();
+    await mouse.moveTo(const Offset(1000, 500));
+    await tester.pump();
+    expect(await _annotationInk(tester), preview);
+    expect(find.text('Next  2'), findsOneWidget);
+
+    await tester.tapAt(_sourceOrigin + const Offset(95, 75));
+    await tester.pump();
+    expect(find.text('Next  3'), findsOneWidget);
+    await _press(tester, LogicalKeyboardKey.keyZ, ctrl: true);
+    expect(find.text('1 object'), findsOneWidget);
+    expect(find.text('Next  2'), findsOneWidget);
+    await _press(tester, LogicalKeyboardKey.keyZ, ctrl: true);
+    expect(find.text('0 objects'), findsOneWidget);
+    expect(find.text('Next  1'), findsOneWidget);
+    await _press(tester, LogicalKeyboardKey.keyY, ctrl: true);
+    expect(find.text('1 object'), findsOneWidget);
+    expect(find.text('Next  2'), findsOneWidget);
+    await _press(tester, LogicalKeyboardKey.keyY, ctrl: true);
+    expect(find.text('2 objects'), findsOneWidget);
+    expect(find.text('Next  3'), findsOneWidget);
+    await mouse.removePointer();
+  });
+
+  testWidgets('Move and crop cursors follow the available drag action', (
+    tester,
+  ) async {
+    await _open(tester, image: _testImage(), onCopy: (_) async {});
+    const device = 42;
+    final mouse = TestGesture(
+      dispatcher: tester.sendEventToBinding,
+      kind: .mouse,
+      device: device,
+    );
+    MouseCursor? activeCursor() =>
+        RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(device);
+
+    final corner = _sourceOrigin + const Offset(18, 18);
+    final center = _sourceOrigin + const Offset(72, 50);
+    await mouse.addPointer(location: center);
+    await tester.pump();
+    expect(activeCursor(), SystemMouseCursors.grab);
+    await mouse.down(center);
+    await tester.pump();
+    expect(activeCursor(), SystemMouseCursors.grabbing);
+    await mouse.up();
+
+    await _press(tester, LogicalKeyboardKey.keyC);
+    expect(activeCursor(), SystemMouseCursors.precise);
+    await tester.dragFrom(corner, const Offset(110, 80));
+    await tester.pump();
+    expect(activeCursor(), SystemMouseCursors.grab);
+    await mouse.moveTo(corner);
+    await tester.pump();
+    expect(activeCursor(), SystemMouseCursors.basic);
+    await mouse.moveTo(_sourceOrigin + const Offset(145, 60));
+    await tester.pump();
+    expect(activeCursor(), SystemMouseCursors.precise);
+    await mouse.removePointer();
+  });
 
   testWidgets('Editor controls fit narrow windows', (tester) async {
     await _open(tester, image: _testImage(), onCopy: (_) async {});
@@ -379,6 +454,16 @@ void main() {
       expect(tester.takeException(), isNull, reason: "Window width $width");
       expect(shortcuts, findsOneWidget);
     }
+  });
+
+  testWidgets('Settings is the last item in the editor menu', (tester) async {
+    await _open(tester, image: _testImage(), onCopy: (_) async {});
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    final lastItem = tester.widget<MenuItemButton>(
+      find.byType(MenuItemButton).last,
+    );
+    expect((lastItem.child as Text).data, 'Settings');
   });
 
   testWidgets('Transparent text input and PNG use the same wrapped layout', (
