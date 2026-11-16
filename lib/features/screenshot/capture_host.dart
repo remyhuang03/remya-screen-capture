@@ -18,6 +18,7 @@ import '../capture_controls/capture_icon.dart';
 import '../color_picker/color_data.dart';
 import '../color_picker/color_result_panel.dart';
 import '../image_editor/image_editor.dart';
+import '../settings/open_settings.dart';
 import 'capture_geometry.dart';
 import 'capture_overlay.dart';
 import 'capture_result.dart';
@@ -40,6 +41,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   ColorPickerPreferences _colorPreferences = ColorPickerPreferences();
   late CaptureMode _startMode = widget.initialMode;
   int? _colorView;
+  int? _colorSettingsView;
   Timer? _colorToastTimer;
   Future<List<Uint8List>>? _freezing;
   late final Future<void> _backend = _initializeBackend();
@@ -112,8 +114,9 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         }
       case 'focusLost':
       case 'closed':
-        if (_colorView != null &&
-            (call.arguments as Map?)?['id'] == _colorView) {
+        final id = (call.arguments as Map?)?['id'];
+        if (call.method == 'focusLost' && id == _colorSettingsView) break;
+        if (_colorView != null && id == _colorView) {
           await _quit();
         }
     }
@@ -388,17 +391,18 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       return;
     }
     _colorView = id;
-    Rect bounds(Size size, double height) {
+    Rect bounds(Size size, double height, Offset? origin) {
       final width = math.min(
         toast ? 480.0 : 640.0,
         math.max(0.0, size.width - 16),
       );
       height = math.min(height, math.max(0.0, size.height - 16));
       return Rect.fromLTWH(
-        (size.width - width) / 2,
-        toast
-            ? math.max(8.0, size.height - height - 56)
-            : (size.height - height) / 2,
+        origin?.dx.clamp(0.0, size.width - width) ?? (size.width - width) / 2,
+        origin?.dy.clamp(0.0, size.height - height) ??
+            (toast
+                ? math.max(8.0, size.height - height - 56)
+                : (size.height - height) / 2),
         width,
         height,
       );
@@ -407,7 +411,30 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     final initialHeight = toast
         ? 64.0
         : ColorResultPanel.preferredHeight(_colorPreferences);
-    final height = ValueNotifier(initialHeight);
+    final layout = ValueNotifier<({double height, Offset? origin})>((
+      height: initialHeight,
+      origin: null,
+    ));
+    Rect panelBounds(Size size) =>
+        bounds(size, layout.value.height, layout.value.origin);
+    Future<void> setColorInput() => setCaptureInput(
+      id,
+      [panelBounds(output.bounds.size)],
+      toast
+          ? 'none'
+          : _colorSettingsView == id
+          ? 'onDemand'
+          : 'exclusive',
+    );
+    void updateColorInput() {
+      if (_colorView != id || _closing) return;
+      unawaited(
+        setColorInput().catchError((Object error) {
+          if (_colorView == id && !_closing) debugPrint(_message(error));
+        }),
+      );
+    }
+
     final child = toast
         ? ColorCopyToast(
             picked: picked,
@@ -431,9 +458,18 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
                 _colors.add(entry, _colorPreferences.historySize),
             onDelete: (entry) =>
                 _colors.remove(entry, _colorPreferences.historySize),
-            onPreferences: (value) async {
-              await _colors.writePreferences(value);
-              _colorPreferences = value;
+            onOpenSettings: () async {
+              final previous = _colorSettingsView;
+              // Settings needs keyboard focus while the layer-shell panel stays open.
+              _colorSettingsView = id;
+              try {
+                await setColorInput();
+                await openCaptureSettings(page: 'color-picker');
+              } catch (_) {
+                _colorSettingsView = previous;
+                if (_colorView == id && !_closing) await setColorInput();
+                rethrow;
+              }
             },
             onPickAgain: () => unawaited(
               _continueColorResult(id, () async {
@@ -443,29 +479,38 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
             ),
             onClose: () => unawaited(_quit()),
             onHeightChanged: (value) {
-              if (_colorView != id || _closing || value == height.value) return;
-              height.value = value;
-              unawaited(
-                setCaptureInput(id, [
-                  bounds(output.bounds.size, value),
-                ], 'exclusive').catchError((Object error) {
-                  if (_colorView == id && !_closing) {
-                    debugPrint(_message(error));
-                  }
-                }),
+              if (_colorView != id ||
+                  _closing ||
+                  value == layout.value.height) {
+                return;
+              }
+              layout.value = (height: value, origin: layout.value.origin);
+              updateColorInput();
+            },
+            onDrag: (delta) {
+              if (_colorView != id || _closing) return;
+              // shortcut: the layer surface is output-bound; cross-output drag needs a surface handoff.
+              final size = output.bounds.size;
+              final height = layout.value.height;
+              final target = panelBounds(size).topLeft + delta;
+              layout.value = (
+                height: height,
+                origin: bounds(size, height, target).topLeft,
               );
             },
+            // The implicit pointer grab keeps the drag on this surface until release.
+            onDragEnd: updateColorInput,
           );
     _setView(
       id,
       LayoutBuilder(
         builder: (context, constraints) => ValueListenableBuilder(
-          valueListenable: height,
+          valueListenable: layout,
           child: child,
           builder: (context, value, child) => Stack(
             children: [
               Positioned.fromRect(
-                rect: bounds(constraints.biggest, value),
+                rect: bounds(constraints.biggest, value.height, value.origin),
                 child: child!,
               ),
             ],
@@ -474,9 +519,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       ),
     );
     try {
-      await setCaptureInput(id, [
-        bounds(output.bounds.size, initialHeight),
-      ], toast ? 'none' : 'exclusive');
+      await setColorInput();
       await changeCaptureWindow('show', id);
       if (toast && _colorView == id && _current(revision)) {
         _colorToastTimer = Timer(

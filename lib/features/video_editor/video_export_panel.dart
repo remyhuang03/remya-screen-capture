@@ -214,7 +214,8 @@ class _ExportPanel extends StatelessWidget {
                       displayPath,
                       maxLines: 1,
                       overflow: .ellipsis,
-                      textDirection: .rtl,
+                      textAlign: .left,
+                      textDirection: .ltr,
                     ),
                   ),
                   const CaptureIcon(.folder),
@@ -327,7 +328,6 @@ class _ExportFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final seconds = settings.duration.inMilliseconds / 1000;
     final codec = settings.format.audioCodec;
     final size = bytes >= 1000000
         ? '${(bytes / 1000000).toStringAsFixed(1)} MB'
@@ -343,7 +343,7 @@ class _ExportFooter extends StatelessWidget {
           children: [
             Text('≈ $size', style: theme.textTheme.titleSmall),
             Text(
-              '${_number(seconds)} s at ${_number(settings.speed)}× · ${settings.format.videoCodec}'
+              '${videoTimecode(settings.duration, settings.fps)} at ${_number(settings.speed)}× · ${settings.format.videoCodec}'
               '${codec != null && settings.audioTracks.isNotEmpty ? ' / $codec' : ''}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

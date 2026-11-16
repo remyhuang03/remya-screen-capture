@@ -90,6 +90,9 @@ void main() {
   });
   tearDown(() async {
     fixture.process?.kill(.sigkill);
+    for (final source in fixture.sources.values) {
+      source.kill(.sigkill);
+    }
     await directory.delete(recursive: true);
   });
 
@@ -198,6 +201,46 @@ void main() {
     expect(fixture.process, isNull);
   });
 
+  test('changes only private audio inputs while a recording runs', () async {
+    fixture.pipeWire = true;
+    final run = await start(
+      options: const RecordingOptions(systemAudio: false),
+    );
+    final recorder = fixture.process;
+    expect(run.canToggleSystemAudio, isTrue);
+    expect(run.canToggleMicrophone, isTrue);
+    expect(run.systemAudio, isFalse);
+    expect(run.microphone, isFalse);
+    expect(fixture.links, isEmpty);
+    expect(fixture.hasReadDefaultDevice, isFalse);
+    expect(fixture.arguments.where(fixture.sources.containsKey), [
+      fixture.sources.keys.first,
+      fixture.sources.keys.last,
+    ]);
+
+    await run.setMicrophone(true);
+    expect(run.microphone, isTrue);
+    expect(fixture.links, [
+      ('test_mic:capture_MONO', '${fixture.sources.keys.last}.in:input_FL'),
+      ('test_mic:capture_MONO', '${fixture.sources.keys.last}.in:input_FR'),
+    ]);
+    await run.setPaused(true);
+    await run.setMicrophone(false);
+    expect(run.microphone, isFalse);
+    expect(fixture.links, isEmpty);
+    expect(run.paused, isTrue);
+    expect(fixture.process, same(recorder));
+
+    final result = await run.stop();
+    expect(result.systemAudio, isFalse);
+    expect(result.microphone, isTrue);
+    expect(result.microphoneAudioSlot, 1);
+    expect(run.canToggleMicrophone, isFalse);
+    for (final source in fixture.sources.values) {
+      await source.exitCode;
+    }
+  });
+
   test('falls back to interrupt when stop IPC fails', () async {
     fixture.rejectStop = true;
     final run = await start();
@@ -242,6 +285,10 @@ class _RecordingFixture {
   bool hasController = true;
   bool rejectStop = false;
   bool validMedia = true;
+  bool pipeWire = false;
+  bool hasReadDefaultDevice = false;
+  final sources = <String, Process>{};
+  final links = <(String, String)>[];
 
   Future<Process> launch(String program, List<String> args) async {
     switch (program) {
@@ -271,9 +318,38 @@ class _RecordingFixture {
             ],
           }),
         );
+      case 'pactl' when args.single == 'info':
+        return _reply(pipeWire ? 'PulseAudio (on PipeWire)' : 'PulseAudio');
+      case 'pactl':
+        hasReadDefaultDevice = true;
+        return _reply(
+          args.single == 'get-default-sink' ? 'test_sound' : 'test_mic',
+        );
+      case 'pw-loopback' || 'pw-link' when args.first == '--version':
+        return _reply('1.6.11');
+      case 'pw-loopback':
+        final process = await Process.start('sleep', ['60']);
+        sources[args[1]] = process;
+        return process;
+      case 'pw-link' when args.first == '-o':
+        return _reply(
+          'test_sound:monitor_FL\ntest_sound:monitor_FR\ntest_mic:capture_MONO',
+        );
+      case 'pw-link':
+        final pair = (args[1], args[2]);
+        if (args.first == '-w') {
+          links.add(pair);
+        } else {
+          links.remove(pair);
+        }
+        return _reply('');
       case 'gpu-screen-recorder' when args.first == '--list-audio-devices':
         return _reply(
-          'default_output|Default output\n${hasMicrophone ? 'default_input|Default input' : ''}',
+          [
+            'default_output|Default output',
+            if (hasMicrophone) 'default_input|Default input',
+            ...sources.keys,
+          ].join('\n'),
         );
       case 'gpu-screen-recorder':
         arguments = args;

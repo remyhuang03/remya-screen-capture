@@ -2,8 +2,8 @@ part of 'image_editor.dart';
 
 const _scrollbarExtent = 16.0;
 
-class _BrushCursor extends CustomPainter {
-  _BrushCursor(
+class _ToolCursor extends CustomPainter {
+  _ToolCursor(
     this.cursor,
     this.view,
     this.renderer,
@@ -27,7 +27,14 @@ class _BrushCursor extends CustomPainter {
     final radius = style.size * view.scale / 2;
     canvas.save();
     canvas.clipRect(visibleImage);
-    if (tool == .mosaic) {
+    if (tool == .counter) {
+      canvas.translate(position.dx, position.dy);
+      canvas.scale(view.scale);
+      renderer._paintObject(
+        canvas,
+        _Annotation(.counter, [Offset.zero], style),
+      );
+    } else if (tool == .mosaic) {
       canvas.save();
       canvas.translate(view.origin.dx, view.origin.dy);
       canvas.scale(view.scale);
@@ -56,7 +63,7 @@ class _BrushCursor extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_BrushCursor oldDelegate) =>
+  bool shouldRepaint(_ToolCursor oldDelegate) =>
       view.origin != oldDelegate.view.origin ||
       view.scale != oldDelegate.view.scale ||
       view.crop != oldDelegate.view.crop ||

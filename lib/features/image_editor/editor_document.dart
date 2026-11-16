@@ -33,7 +33,7 @@ enum _Tool {
   bool get isLine => this == .line || this == .arrow;
   bool get isShape => this == .rectangle || this == .ellipse;
   bool get freehand => this == .pen || this == .highlighter;
-  bool get hasBrushCursor => freehand || this == .mosaic;
+  bool get hasPreviewCursor => freehand || this == .mosaic || this == .counter;
 
   (double, double)? get sizes => switch (this) {
     .pen || .rectangle || .ellipse || .line || .arrow => (1, 12),

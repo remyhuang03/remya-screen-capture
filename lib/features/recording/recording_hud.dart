@@ -45,6 +45,8 @@ class RecordingHudController extends ChangeNotifier {
     required this.systemAudio,
     required this.microphone,
     required this.cursor,
+    this.onSystemAudio,
+    this.onMicrophone,
     required this.elapsed,
     required this.paused,
     required this.onPause,
@@ -77,9 +79,11 @@ class RecordingHudController extends ChangeNotifier {
   final List<CaptureMonitor> monitors;
   final CaptureMonitor target;
   final Rect? region;
-  final bool systemAudio;
-  final bool microphone;
+  final ({bool enabled, bool available}) Function() systemAudio;
+  final ({bool enabled, bool available}) Function() microphone;
   final bool cursor;
+  final Future<void> Function(bool)? onSystemAudio;
+  final Future<void> Function(bool)? onMicrophone;
   final Duration Function() elapsed;
   final bool Function() paused;
   final Future<void> Function() onPause;
@@ -104,6 +108,8 @@ class RecordingHudController extends ChangeNotifier {
   bool _pickingColor = false;
   bool _busy = false;
   bool _wasPaused = false;
+  ({bool enabled, bool available})? _lastSystemAudio;
+  ({bool enabled, bool available})? _lastMicrophone;
   bool _disposed = false;
   ({String label, String detail})? _error;
   Timer? _errorTimer;
@@ -124,8 +130,14 @@ class RecordingHudController extends ChangeNotifier {
     if (_disposed) return;
     _seconds.value = elapsed().inSeconds;
     final nowPaused = paused();
-    if (_wasPaused != nowPaused) {
+    final nowSystemAudio = systemAudio();
+    final nowMicrophone = microphone();
+    if (_wasPaused != nowPaused ||
+        _lastSystemAudio != nowSystemAudio ||
+        _lastMicrophone != nowMicrophone) {
       _wasPaused = nowPaused;
+      _lastSystemAudio = nowSystemAudio;
+      _lastMicrophone = nowMicrophone;
       notifyListeners();
     }
   }
@@ -746,13 +758,21 @@ class _RecordingToolbar extends StatelessWidget {
             onPressed: controller._clear,
           ),
           const CaptureDivider(),
-          _InputStatus(
-            label: 'System audio · ${controller.systemAudio ? 'on' : 'off'}',
-            icon: controller.systemAudio ? .volumeUp : .volumeOff,
+          _AudioToggle(
+            label: 'System audio',
+            state: controller.systemAudio(),
+            onIcon: .volumeUp,
+            offIcon: .volumeOff,
+            controller: controller,
+            onToggle: controller.onSystemAudio,
           ),
-          _InputStatus(
-            label: 'Microphone · ${controller.microphone ? 'on' : 'off'}',
-            icon: controller.microphone ? .mic : .micOff,
+          _AudioToggle(
+            label: 'Microphone',
+            state: controller.microphone(),
+            onIcon: .mic,
+            offIcon: .micOff,
+            controller: controller,
+            onToggle: controller.onMicrophone,
           ),
           _InputStatus(
             label:
@@ -841,6 +861,45 @@ class _RecordingStatus extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AudioToggle extends StatelessWidget {
+  const _AudioToggle({
+    required this.label,
+    required this.state,
+    required this.onIcon,
+    required this.offIcon,
+    required this.controller,
+    required this.onToggle,
+  });
+
+  final String label;
+  final ({bool enabled, bool available}) state;
+  final CaptureSymbol onIcon;
+  final CaptureSymbol offIcon;
+  final RecordingHudController controller;
+  final Future<void> Function(bool)? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = state.enabled ? onIcon : offIcon;
+    final status = '$label · ${state.enabled ? 'on' : 'off'}';
+    final toggle = onToggle;
+    if (!state.available || toggle == null) {
+      return _InputStatus(label: status, icon: icon, dimmed: !state.enabled);
+    }
+    return CaptureIconButton(
+      icon: icon,
+      label: status,
+      selected: state.enabled,
+      onPressed: controller._busy
+          ? null
+          : () => controller._invoke(
+              () => toggle(!state.enabled),
+              'Could not change ${label.toLowerCase()}',
+            ),
     );
   }
 }

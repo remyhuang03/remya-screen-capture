@@ -55,8 +55,8 @@ enum CaptureSymbol {
   speed('speed'),
   movie('movie'),
   folder('folder'),
-  replay5('replay-5'),
-  forward5('forward-5'),
+  previousFrame('previous-frame'),
+  nextFrame('next-frame'),
   move('move'),
   add('add');
 
