@@ -193,6 +193,7 @@ void main() {
 
       final toolbarHint = find.text('Switch');
       final before = tester.getCenter(toolbarHint);
+      final frozenImage = tester.widget<RawImage>(find.byType(RawImage));
       await tester.dragFrom(
         before,
         const Offset(20, 48),
@@ -200,6 +201,7 @@ void main() {
       );
       await tester.pump();
       expect(tester.getCenter(toolbarHint), before + const Offset(20, 48));
+      expect(tester.widget<RawImage>(find.byType(RawImage)), same(frozenImage));
       expect(requests, isEmpty);
 
       await tester.tapAt(const Offset(510, 330));

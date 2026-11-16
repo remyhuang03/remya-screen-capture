@@ -99,13 +99,34 @@ void main() {
     expect(inputs[1]!.rectangles.single.size, const Size(464, 58));
     expect(inputs[2]!.rectangles, isEmpty);
     expect(inputs[2]!.keyboard, isFalse);
+    final initialInput = inputs[1]!.rectangles;
+    final destinationInput = inputs[2]!.rectangles;
 
     final mouse = await tester.startGesture(
       tester.getCenter(find.text('00:42')),
       kind: .mouse,
     );
+    await tester.pump();
+    final ink = tester.widget<CustomPaint>(find.byType(CustomPaint).first);
+    await mouse.moveBy(const Offset(80, 50));
+    await tester.pump();
+    expect(
+      tester.widget<CustomPaint>(find.byType(CustomPaint).first),
+      same(ink),
+    );
+    expect(inputs[1]!.rectangles, same(initialInput));
+
     await mouse.moveTo(const Offset(900, 6));
     await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byType(RecordingHud).last,
+        matching: find.text('00:42'),
+      ),
+      findsOneWidget,
+    );
+    expect(inputs[1]!.rectangles, same(initialInput));
+    expect(inputs[2]!.rectangles, same(destinationInput));
     await mouse.up();
     await tester.pump();
 

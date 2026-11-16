@@ -43,13 +43,15 @@ class CaptureOverlay extends StatefulWidget {
 class _CaptureOverlayState extends State<CaptureOverlay> {
   final _focus = FocusNode(debugLabel: 'Screenshot overlay');
   int? _pointerId;
-  Offset? _toolbarPosition;
+  final _toolbarPosition = ValueNotifier<Offset?>(null);
+  late final _toolbarLayout = _ModeToolbarLayout(_toolbarPosition);
 
   CaptureSession get session => widget.session;
   FrozenOutput get output => widget.output;
 
   @override
   void dispose() {
+    _toolbarPosition.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -325,24 +327,25 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                   session.draft == null &&
                   scroll == null)
                 Positioned.fill(
-                  child: CustomSingleChildLayout(
-                    delegate: _ModeToolbarLayout(_toolbarPosition),
-                    child: _ModeToolbar(
-                      mode: session.mode,
-                      onChanged: (value) {
-                        _focus.requestFocus();
-                        session.changeMode(value, size);
-                      },
-                      onDrag: (delta, toolbar) {
-                        final layout = _ModeToolbarLayout(_toolbarPosition);
-                        setState(
-                          () => _toolbarPosition = layout.positionFor(
-                            size,
-                            toolbar,
-                            delta: delta,
-                          ),
-                        );
-                      },
+                  child: RepaintBoundary(
+                    child: CustomSingleChildLayout(
+                      delegate: _toolbarLayout,
+                      child: RepaintBoundary(
+                        child: _ModeToolbar(
+                          mode: session.mode,
+                          onChanged: (value) {
+                            _focus.requestFocus();
+                            session.changeMode(value, size);
+                          },
+                          onDrag: (delta, toolbar) {
+                            _toolbarPosition.value = _toolbarLayout.positionFor(
+                              size,
+                              toolbar,
+                              delta: delta,
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -402,9 +405,9 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
 }
 
 class _ModeToolbarLayout extends SingleChildLayoutDelegate {
-  const _ModeToolbarLayout(this.position);
+  _ModeToolbarLayout(this.position) : super(relayout: position);
 
-  final Offset? position;
+  final ValueNotifier<Offset?> position;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
@@ -417,7 +420,7 @@ class _ModeToolbarLayout extends SingleChildLayoutDelegate {
   Offset positionFor(Size size, Size childSize, {Offset delta = Offset.zero}) {
     final horizontal = size.width - childSize.width;
     final vertical = size.height - childSize.height;
-    final target = position ?? Offset(horizontal / 2, 24);
+    final target = position.value ?? Offset(horizontal / 2, 24);
     return Offset(
       (target.dx.clamp(0.0, horizontal) + delta.dx).clamp(0.0, horizontal),
       (target.dy.clamp(0.0, vertical) + delta.dy).clamp(0.0, vertical),
