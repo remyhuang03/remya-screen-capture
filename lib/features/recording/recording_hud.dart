@@ -6,7 +6,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../capture_controls/capture_buttons.dart';
@@ -806,11 +805,10 @@ class _RecordingStatus extends StatelessWidget {
         children: [
           Opacity(
             opacity: paused ? .55 : 1,
-            child: SvgPicture.asset(
-              'assets/icons/capture/recording-dot.svg',
-              width: 10,
-              height: 10,
-              excludeFromSemantics: true,
+            child: const Icon(
+              Icons.circle_rounded,
+              size: 10,
+              color: Color(0xfff2b8b5),
             ),
           ),
           Flexible(

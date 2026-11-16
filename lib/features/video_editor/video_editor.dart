@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -930,26 +929,4 @@ class _EditorBar extends StatelessWidget {
       ),
     );
   }
-}
-
-class _EditorIcon extends StatelessWidget {
-  const _EditorIcon(this.name, this.size, {this.color});
-
-  final String name;
-  final double size;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) => SvgPicture.asset(
-    'assets/icons/capture/video-editor-$name.svg',
-    width: size,
-    height: size,
-    colorFilter: ColorFilter.mode(
-      color ??
-          IconTheme.of(context).color ??
-          Theme.of(context).colorScheme.onSurface,
-      .srcIn,
-    ),
-    excludeFromSemantics: true,
-  );
 }

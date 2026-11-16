@@ -268,14 +268,17 @@ class _CaptureControlsPreviewState extends State<CaptureControlsPreview> {
                   ),
                   _Section(
                     title: 'Icons',
-                    description: 'Material Symbols Rounded · 20 px',
+                    description: 'Material Icons and SVG artwork · 20 px',
                     spacing: 0,
                     children: [
                       for (final symbol in CaptureSymbol.values)
                         SizedBox.square(
                           dimension: 44,
                           child: CaptureTooltip(
-                            label: symbol.asset.replaceAll('-', ' '),
+                            label: symbol.name.replaceAllMapped(
+                              RegExp('[A-Z0-9]'),
+                              (match) => ' ${match[0]!.toLowerCase()}',
+                            ),
                             child: Center(child: CaptureIcon(symbol)),
                           ),
                         ),

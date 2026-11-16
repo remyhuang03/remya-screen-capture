@@ -61,7 +61,7 @@ class _Transport extends StatelessWidget {
                     ),
                     child: value
                         ? const CaptureIcon(.pause)
-                        : const _EditorIcon('play', 28),
+                        : const Icon(Icons.play_arrow_rounded, size: 28),
                   ),
                 ),
               ),
@@ -221,7 +221,7 @@ class _Timeline extends StatelessWidget {
         children: [
           Row(
             children: [
-              const _EditorIcon('trim', 16),
+              const Icon(Icons.content_cut_rounded, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -550,7 +550,11 @@ class _Playhead extends StatelessWidget {
             Positioned(
               left: x - 6,
               top: -10,
-              child: _EditorIcon('knob', 12, color: colors.onSurface),
+              child: Icon(
+                Icons.circle_rounded,
+                size: 12,
+                color: colors.onSurface,
+              ),
             ),
             Positioned(
               left: (x - 38).clamp(0.0, math.max(0.0, width - 76)),

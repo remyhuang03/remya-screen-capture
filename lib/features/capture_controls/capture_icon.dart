@@ -1,68 +1,70 @@
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Material Symbols Rounded artwork from the capture design.
+/// Material Icons and retained SVG artwork used by capture controls.
 enum CaptureSymbol {
-  region('region'),
-  window('window'),
-  scrollCapture('scroll-capture'),
-  check('check'),
-  close('close'),
-  copy('copy'),
-  edit('edit'),
-  mic('mic'),
-  micOff('mic-off'),
-  volumeUp('volume-up'),
-  volumeOff('volume-off'),
-  cursor('cursor'),
-  record('record'),
-  stop('stop'),
-  pause('pause'),
-  play('play'),
-  laserPointer('laser-pointer'),
-  highlighter('highlighter'),
-  delete('delete'),
-  timer('timer'),
-  videocam('videocam'),
-  pen('pen'),
-  rectangle('rectangle'),
-  ellipse('ellipse'),
-  line('line'),
-  arrow('arrow'),
-  mosaic('mosaic'),
-  counter('counter'),
-  text('text'),
-  crop('crop'),
-  undo('undo'),
-  redo('redo'),
-  zoomIn('zoom-in'),
-  zoomOut('zoom-out'),
-  fitScreen('fit-screen'),
-  save('save'),
-  palette('palette'),
-  colorize('colorize'),
-  history('history'),
-  tune('tune'),
-  bold('bold'),
-  italic('italic'),
-  underline('underline'),
-  strokeWidth('stroke-width'),
-  keyboard('keyboard'),
-  more('more'),
-  dropdown('dropdown'),
-  settings('settings'),
-  trim('trim'),
-  speed('speed'),
-  movie('movie'),
-  folder('folder'),
-  replay5('replay-5'),
-  forward5('forward-5'),
-  move('move'),
-  add('add');
+  region.svg('region'),
+  window.svg('window'),
+  scrollCapture.material(Icons.swap_vert_rounded),
+  check.material(Icons.check_rounded),
+  close.material(Icons.close_rounded),
+  copy.material(Icons.content_copy_rounded),
+  edit.material(Icons.edit_rounded),
+  mic.material(Icons.mic_rounded),
+  micOff.material(Icons.mic_off_rounded),
+  volumeUp.material(Icons.volume_up_rounded),
+  volumeOff.material(Icons.volume_off_rounded),
+  cursor.svg('cursor'),
+  record.material(Icons.fiber_manual_record_rounded),
+  stop.material(Icons.stop_rounded),
+  pause.material(Icons.pause_rounded),
+  play.material(Icons.play_arrow_rounded),
+  laserPointer.svg('laser-pointer'),
+  highlighter.svg('highlighter'),
+  delete.material(Icons.delete_outline_rounded),
+  timer.material(Icons.timer_rounded),
+  videocam.material(Icons.videocam_rounded),
+  pen.material(Icons.draw_rounded),
+  rectangle.material(Icons.check_box_outline_blank_rounded),
+  ellipse.material(Icons.panorama_fish_eye_rounded),
+  line.material(Icons.horizontal_rule_rounded),
+  arrow.material(Icons.arrow_outward_rounded),
+  mosaic.svg('mosaic'),
+  counter.svg('counter'),
+  text.material(Icons.title_rounded),
+  crop.material(Icons.crop_rounded),
+  undo.material(Icons.undo_rounded),
+  redo.material(Icons.redo_rounded),
+  zoomIn.material(Icons.zoom_in_rounded),
+  zoomOut.material(Icons.zoom_out_rounded),
+  fitScreen.material(Icons.fit_screen_rounded),
+  save.svg('save'),
+  palette.material(Icons.palette_rounded),
+  colorize.material(Icons.colorize_rounded),
+  history.material(Icons.history_rounded),
+  tune.material(Icons.tune_rounded),
+  bold.material(Icons.format_bold_rounded),
+  italic.material(Icons.format_italic_rounded),
+  underline.material(Icons.format_underlined_rounded),
+  strokeWidth.material(Icons.line_weight_rounded),
+  keyboard.material(Icons.keyboard_rounded),
+  more.material(Icons.more_horiz_rounded),
+  dropdown.material(Icons.arrow_drop_down_rounded),
+  settings.material(Icons.settings_rounded),
+  trim.material(Icons.content_cut_rounded),
+  speed.material(Icons.speed_rounded),
+  movie.material(Icons.movie_rounded),
+  folder.material(Icons.folder_open_rounded),
+  replay5.material(Icons.replay_5_rounded),
+  forward5.material(Icons.forward_5_rounded),
+  move.material(Icons.open_with_rounded),
+  add.material(Icons.add_rounded);
 
-  const CaptureSymbol(this.asset);
+  const CaptureSymbol.material(IconData this.icon) : svgAsset = null;
+  const CaptureSymbol.svg(String this.svgAsset) : icon = null;
 
-  final String asset;
+  final IconData? icon;
+  final String? svgAsset;
 }
 
 class CaptureIcon extends StatelessWidget {
@@ -83,16 +85,19 @@ class CaptureIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final asset = _size == 20 ? _symbol.asset : '${_symbol.asset}-small';
     final color =
         IconTheme.of(context).color ?? Theme.of(context).colorScheme.onSurface;
-    return SvgPicture.asset(
-      'assets/icons/capture/$asset.svg',
-      width: _size,
-      height: _size,
-      colorFilter: ColorFilter.mode(color, .srcIn),
-      excludeFromSemantics: true,
-    );
+    if (_symbol.svgAsset case final asset?) {
+      final filename = _size == 20 ? asset : '$asset-small';
+      return SvgPicture.asset(
+        'assets/icons/capture/$filename.svg',
+        width: _size,
+        height: _size,
+        colorFilter: ColorFilter.mode(color, .srcIn),
+        excludeFromSemantics: true,
+      );
+    }
+    return Icon(_symbol.icon, size: _size, color: color);
   }
 }
 

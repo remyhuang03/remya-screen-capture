@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:remya_ui/settings_ui.dart';
@@ -44,7 +45,7 @@ void main() {
     }
   });
 
-  testWidgets('Preview opens and loads every design icon', (tester) async {
+  testWidgets('Preview opens and renders every capture icon', (tester) async {
     tester.view.physicalSize = const Size(1019, 2300);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -54,13 +55,50 @@ void main() {
 
     expect(find.text('Components · Remy\'a Screen Capture'), findsOneWidget);
     for (final symbol in CaptureSymbol.values) {
-      final icon = await rootBundle.load(
-        'assets/icons/capture/${symbol.asset}.svg',
-      );
-      expect(icon.lengthInBytes, greaterThan(0), reason: symbol.asset);
+      if (symbol.icon case final icon?) {
+        expect(find.byIcon(icon), findsWidgets, reason: symbol.name);
+      } else {
+        expect(_captureSvg(symbol.svgAsset!), findsWidgets);
+      }
     }
     expect(find.text('Icons'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Compact capture icons keep their assets, size and tint', (
+    tester,
+  ) async {
+    const tint = Colors.deepPurple;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: IconTheme(
+          data: IconThemeData(color: tint),
+          child: Row(
+            children: [
+              CaptureIcon.segmentRegion(),
+              CaptureIcon.segmentWindow(),
+              CaptureIcon.segmentColor(),
+              CaptureIcon.swatchAdd(),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    for (final asset in ['region-small', 'window-small']) {
+      final svg = tester.widget<SvgPicture>(_captureSvg(asset));
+      expect(svg.width, 18);
+      expect(svg.height, 18);
+      expect(svg.colorFilter, const ColorFilter.mode(tint, .srcIn));
+    }
+    for (final (glyph, size) in [
+      (Icons.colorize_rounded, 18),
+      (Icons.add_rounded, 16),
+    ]) {
+      final icon = tester.widget<Icon>(find.byIcon(glyph));
+      expect(icon.size, size);
+      expect(icon.color, tint);
+    }
   });
 
   testWidgets('Preview fits a narrow window', (tester) async {
@@ -307,3 +345,11 @@ void main() {
     },
   );
 }
+
+Finder _captureSvg(String asset) => find.byWidgetPredicate(
+  (widget) =>
+      widget is SvgPicture &&
+      widget.bytesLoader is SvgAssetLoader &&
+      (widget.bytesLoader as SvgAssetLoader).assetName ==
+          'assets/icons/capture/$asset.svg',
+);
