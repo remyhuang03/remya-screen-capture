@@ -200,6 +200,8 @@ class CaptureWindows {
     int64_t id;
     Role role;
     bool active = true;
+    bool has_first_frame = false;
+    bool show_after_first_frame = false;
     guint32 drag_time = GDK_CURRENT_TIME;
     int drag_x = 0;
     int drag_y = 0;
@@ -210,6 +212,24 @@ class CaptureWindows {
     void apply_input_region() const {
       gtk_widget_input_shape_combine_region(window, input_region.get());
       gtk_widget_queue_draw(window);
+    }
+
+    void show() {
+      if (!is_layer() && !has_first_frame) {
+        show_after_first_frame = true;
+        gtk_widget_show(GTK_WIDGET(view));
+        gtk_widget_realize(GTK_WIDGET(view));
+        return;
+      }
+      gtk_widget_show_all(window);
+      // GTK's first map resets the Wayland region during realization.
+      if (is_layer()) apply_input_region();
+      gtk_widget_grab_focus(GTK_WIDGET(view));
+    }
+
+    void hide() {
+      show_after_first_frame = false;
+      gtk_widget_hide(window);
     }
   };
 
@@ -268,20 +288,17 @@ class CaptureWindows {
     }
     auto& window = *found->second;
     if (g_str_equal(method, "show")) {
-      gtk_widget_show_all(window.window);
-      // GTK's first map resets the Wayland region during realization.
-      if (window.is_layer()) window.apply_input_region();
-      gtk_widget_grab_focus(GTK_WIDGET(window.view));
+      window.show();
       success(call);
     } else if (g_str_equal(method, "hide")) {
-      gtk_widget_hide(window.window);
+      window.hide();
       gdk_display_sync(display_);
       success(call);
     } else if (g_str_equal(method, "close")) {
       // shortcut: retain hidden views until shutdown, destroy them sooner
       // when Flutter's GTK view disposal can safely overlap raster work.
       const bool was_mapped = gtk_widget_get_mapped(window.window);
-      gtk_widget_hide(window.window);
+      window.hide();
       window.active = false;
       window.drag_time = GDK_CURRENT_TIME;
       window.input_region.reset();
@@ -361,6 +378,8 @@ class CaptureWindows {
       gtk_window_set_default_size(window, 1280, 800);
       gtk_widget_set_size_request(GTK_WIDGET(view), 480, 340);
       register_capture_plugins(FL_PLUGIN_REGISTRY(view));
+      g_signal_connect(view, "first-frame", G_CALLBACK(editor_first_frame),
+                       state.get());
       auto* gesture = gtk_gesture_multi_press_new(widget);
       g_object_set_data_full(G_OBJECT(widget), "move-gesture", gesture,
                              g_object_unref);
@@ -478,6 +497,12 @@ class CaptureWindows {
 
   static void monitor_changed(GdkMonitor*, GParamSpec*, gpointer data) {
     static_cast<CaptureWindows*>(data)->emit("outputsChanged");
+  }
+
+  static void editor_first_frame(FlView*, gpointer data) {
+    auto& window = *static_cast<Window*>(data);
+    window.has_first_frame = true;
+    if (std::exchange(window.show_after_first_frame, false)) window.show();
   }
 
   static void remember_pointer(GtkGestureMultiPress*, int, double, double,

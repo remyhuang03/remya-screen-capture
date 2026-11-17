@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -42,7 +41,15 @@ String? settingsPage(List<String> args) {
 
 Future<void> main(List<String> args) async {
   final entrypoint = parseEntrypoint(args);
-  final page = entrypoint == .settings ? settingsPage(args) : null;
+  String? page;
+  if (entrypoint == .settings) {
+    try {
+      page = settingsPage(args);
+    } on ArgumentError catch (error) {
+      stderr.writeln(error);
+      exit(64);
+    }
+  }
   final recording = entrypoint == .recording;
   if (recording &&
       Platform.environment['XDG_RUNTIME_DIR']?.startsWith('/') == true) {
@@ -63,14 +70,11 @@ Future<void> main(List<String> args) async {
       ),
     );
   });
+  await themeController.start();
   if (entrypoint == .settings) {
-    // The settings window waits for the shared theme to avoid a recolor.
-    await themeController.start();
     runApp(ScreenCaptureSettingsApp(page: page));
     return;
   }
-  // Capture starts immediately; the shared theme applies once it loads.
-  unawaited(themeController.start());
   runWidget(switch (entrypoint) {
     .settings => throw StateError('unreachable'),
     .screenshot => const CaptureHost(),

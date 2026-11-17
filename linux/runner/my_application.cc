@@ -99,9 +99,16 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
     auto* view = fl_view_new(project);
     register_capture_plugins(FL_PLUGIN_REGISTRY(view));
+    gtk_widget_show(GTK_WIDGET(view));
     gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
     attach_settings_channel(GTK_WINDOW(window), view);
-    gtk_widget_show_all(window);
+    g_signal_connect(
+        view, "first-frame",
+        G_CALLBACK(+[](FlView* view, gpointer) {
+          gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+        }),
+        nullptr);
+    gtk_widget_realize(GTK_WIDGET(view));
     return;
   }
   start_capture_windows(GTK_APPLICATION(application),

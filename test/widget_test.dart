@@ -26,7 +26,7 @@ void main() {
     expect(updated.textTheme.bodyMedium?.fontFamily, 'Inter');
   });
 
-  testWidgets('capture surfaces follow the shared light and dark mode', (
+  testWidgets('capture surfaces use the shared theme on their first frame', (
     tester,
   ) async {
     final previous = themeController.theme;
@@ -37,10 +37,17 @@ void main() {
       (ThemeMode.light, Brightness.light),
       (ThemeMode.dark, Brightness.dark),
     ]) {
-      themeController.theme = .new(mode: mode);
+      themeController.theme = .new(
+        mode: mode,
+        seedColor: const Color(0xff008800),
+      );
       await tester.pumpWidget(app);
-      await tester.pumpAndSettle();
-      expect(Theme.of(palette.currentContext!).brightness, brightness);
+      final theme = Theme.of(palette.currentContext!);
+      expect(theme.brightness, brightness);
+      expect(
+        theme.colorScheme.primary,
+        remyaCaptureTheme(brightness).colorScheme.primary,
+      );
       await tester.pumpWidget(const SizedBox());
     }
   });
