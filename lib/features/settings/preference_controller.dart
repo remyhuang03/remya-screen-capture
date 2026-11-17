@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:remya_client/remya_client.dart';
 
 /// One app preference watched through remyad. Errors keep the last valid
-/// value; a successful write or [start] resumes watching.
+/// value while the connection recovers.
 class PreferenceController<T> extends ChangeNotifier {
   PreferenceController({
     required this.preferences,
@@ -22,16 +22,25 @@ class PreferenceController<T> extends ChangeNotifier {
   Object? error;
   bool saving = false;
   StreamSubscription<Map<String, dynamic>>? _watch;
+  Timer? _retry;
+  int _watchGeneration = 0;
+  int _observed = 0;
   bool _disposed = false;
 
   void start() {
-    _watch?.cancel();
+    if (_disposed) return;
+    _retry?.cancel();
+    _retry = null;
+    final generation = ++_watchGeneration;
+    _watch?.cancel().ignore();
     _watch = preferences
         .watch(key)
         .listen(
           (reply) {
+            if (generation != _watchGeneration) return;
             try {
               value = parse(reply['value']);
+              _observed++;
               error = null;
             } catch (failure) {
               error = failure;
@@ -39,26 +48,39 @@ class PreferenceController<T> extends ChangeNotifier {
             _notify();
           },
           onError: (Object failure) {
-            _watch = null;
+            if (generation != _watchGeneration) return;
             error = failure;
+            _watchEnded();
             _notify();
           },
-          onDone: () => _watch = null,
+          onDone: () {
+            if (generation != _watchGeneration) return;
+            _watchEnded();
+          },
           cancelOnError: true,
         );
   }
 
+  void _watchEnded() {
+    _watch = null;
+    _retry ??= Timer(const Duration(seconds: 2), start);
+  }
+
   Future<void> write(T next) async {
-    if (saving) return;
+    if (saving || _disposed) return;
+    final observed = _observed;
     saving = true;
     _notify();
     try {
       await save(next);
-      value = next;
+      if (_disposed) return;
+      if (observed == _observed) value = next;
       error = null;
-      if (_watch == null && !_disposed) start();
+      // Read from a fresh subscription after Set so an older response cannot
+      // undo a value just observed from Core or arrive later.
+      start();
     } catch (failure) {
-      error = failure;
+      if (!_disposed) error = failure;
     } finally {
       saving = false;
       _notify();
@@ -72,7 +94,9 @@ class PreferenceController<T> extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _watch?.cancel();
+    _watchGeneration++;
+    _retry?.cancel();
+    _watch?.cancel().ignore();
     super.dispose();
   }
 }

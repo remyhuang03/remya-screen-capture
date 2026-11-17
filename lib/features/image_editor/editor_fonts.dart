@@ -22,10 +22,10 @@ class _FontPickerState extends State<_FontPicker> {
   String _query = '';
 
   Future<List<String>> _loadSystemFonts() async {
-    final result = await Process.run('fc-list', [
+    final result = await runCommand('fc-list', [
       '--format',
       r'%{[]family{%{family}\n}}',
-    ]);
+    ], timeout: const Duration(seconds: 5));
     if (result.exitCode != 0) throw StateError('fc-list failed');
     final families = {
       for (final line in (result.stdout as String).split('\n'))

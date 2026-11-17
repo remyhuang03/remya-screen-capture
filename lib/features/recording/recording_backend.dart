@@ -6,6 +6,7 @@ import 'dart:ui' show Rect;
 
 import 'package:remya_client/remya_client.dart';
 
+import '../../process_command.dart';
 import '../screenshot/capture_geometry.dart';
 
 part 'recording_audio.dart';
@@ -603,25 +604,21 @@ Future<_CommandResult> _command(
   List<String> args, {
   Duration timeout = const Duration(seconds: 5),
 }) async {
-  final Process process;
   try {
-    process = await launch(program, args);
+    final result = await runCommand(
+      program,
+      args,
+      timeout: timeout,
+      launch: launch,
+    );
+    return (
+      exitCode: result.exitCode,
+      stdout: result.stdout as String,
+      stderr: result.stderr as String,
+    );
   } on ProcessException catch (error) {
     throw _launchError(error);
-  }
-  process.stdin.close().ignore();
-  const decoder = Utf8Decoder(allowMalformed: true);
-  final output = process.stdout.transform(decoder).join();
-  final error = process.stderr.transform(decoder).join();
-  try {
-    final (exitCode, stdout, stderr) = await (
-      process.exitCode,
-      output,
-      error,
-    ).wait.timeout(timeout);
-    return (exitCode: exitCode, stdout: stdout, stderr: stderr);
   } on TimeoutException {
-    process.kill(.sigkill);
     throw StateError('$program did not respond in time.');
   }
 }

@@ -384,20 +384,29 @@ class ColorPickerStore {
     }
     final stdout = process.stdout.listen((_) {});
     final errors = StringBuffer();
-    final stderr = process.stderr.transform(utf8.decoder).listen(errors.write);
+    final stderr = process.stderr
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(errors.write);
+    var exited = false;
+    final exit = process.exitCode.then((status) {
+      exited = true;
+      return status;
+    });
     try {
-      process.stdin.write(text);
-      await process.stdin.close();
-      final status = await process.exitCode.timeout(const Duration(seconds: 3));
+      final status = await (() async {
+        process.stdin.write(text);
+        await process.stdin.close();
+        return exit;
+      })().timeout(const Duration(seconds: 3));
       if (status != 0) {
         throw StateError(
           'Could not copy the color (wl-copy exited with $status). ${errors.toString().trim()}',
         );
       }
     } on TimeoutException {
-      process.kill();
       throw StateError('Timed out copying the color to the Wayland clipboard.');
     } finally {
+      if (!exited) process.kill(.sigkill);
       await stdout.cancel();
       // The background clipboard owner can keep stderr open after its parent exits.
       await stderr.cancel();

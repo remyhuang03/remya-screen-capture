@@ -2,6 +2,7 @@ use anyhow::{Context, Result, ensure};
 use std::process::Command;
 use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use crate::api::{StartupCapture, StartupFrame};
 
@@ -25,7 +26,10 @@ pub(crate) fn take() -> Option<StartupCapture> {
 }
 
 fn hyprctl(arguments: &[&str]) -> Result<String> {
-    let output = Command::new("hyprctl").args(arguments).output()?;
+    let mut command = Command::new("hyprctl");
+    command.args(arguments);
+    let output = crate::process::capture(command, Duration::from_secs(3))
+        .context("Could not run hyprctl")?;
     ensure!(output.status.success(), "Could not read Hyprland state");
     Ok(String::from_utf8(output.stdout)?)
 }

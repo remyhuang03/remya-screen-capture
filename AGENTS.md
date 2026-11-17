@@ -25,7 +25,7 @@
 
 ## Toolchains & Dependencies
 - Always invoke Flutter and Dart as `fvm flutter ...` and `fvm dart ...`, never through global SDK commands.
-- `.fvmrc` pins Flutter to `3.47.9` (latest stable). Do not change versions without explicit instruction. Run `fvm install` for fresh setup.
+- Use the Flutter version pinned in `.fvmrc`. Do not change versions without explicit instruction. Run `fvm install` for fresh setup.
 - Use the root `rust-toolchain.toml` and inherit common crate metadata from the workspace.
 - Commit `.fvmrc`, `pubspec.lock`, and `Cargo.lock`; ignore SDK caches, build output, and local configuration.
 - Reuse existing helpers and dependencies. Add packages only for concrete requirements.
@@ -54,7 +54,7 @@
   git diff --check
   ```
 - Run `fvm flutter pub get` after dependency changes.
-- Once Rust APIs exist, regenerate bridge bindings after API changes and run `cargo fmt --all`. Bundle third-party notices when adding Rust dependencies.
+- Regenerate Rust API bindings with `flutter_rust_bridge_codegen` 2.13.0 using `flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml`. Normalize the output with `cargo fmt --all` and `fvm dart format lib/src/rust_bridge` before reviewing the binding diff. Bundle third-party notices when adding Rust dependencies.
 - Keep durable tests for non-trivial logic and regressions.
 
 ## Git Workflow

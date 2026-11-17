@@ -2,34 +2,29 @@ use anyhow::{Context, Result, bail, ensure};
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::time::Duration;
 use tempfile::NamedTempFile;
 
 use crate::capture::check_png;
 
 pub(crate) fn copy_png(png: &[u8]) -> Result<()> {
     check_png(png)?;
-    let mut child = Command::new("wl-copy")
-        .args(["--type", "image/png"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        // The process serving the clipboard keeps stderr open after the parent exits.
-        .stderr(Stdio::inherit())
-        .spawn()
-        .context("Could not launch wl-copy. Install wl-clipboard to copy screenshots")?;
-    let write = child
-        .stdin
-        .take()
-        .context("Could not open the clipboard input")?
-        .write_all(png);
-    let status = child
-        .wait()
-        .context("Could not copy to the Wayland clipboard")?;
+    let mut command = Command::new("wl-copy");
+    command.args(["--type", "image/png"]);
+    let result = crate::process::send(command, png, Duration::from_secs(3)).map_err(|error| {
+        if error.kind() == ErrorKind::NotFound {
+            anyhow::anyhow!("Could not launch wl-copy. Install wl-clipboard to copy screenshots")
+        } else {
+            anyhow::anyhow!("Could not copy to the Wayland clipboard: {error}")
+        }
+    })?;
     ensure!(
-        status.success(),
-        "Could not copy to the Wayland clipboard (wl-copy {status})"
+        result.status.success(),
+        "Could not copy to the Wayland clipboard (wl-copy {})",
+        result.status
     );
-    write.context("Could not send the image to the clipboard")
+    Ok(())
 }
 
 pub(crate) fn save_png(png: &[u8], path: &str, replace: bool, unique: bool) -> Result<String> {

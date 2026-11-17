@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import '../../process_command.dart';
+
 class VideoMedia {
   const VideoMedia({
     required this.duration,
@@ -25,7 +27,7 @@ class VideoMedia {
       Duration(microseconds: (Duration.microsecondsPerSecond / fps).round());
 
   static Future<VideoMedia> probe(String path) async {
-    final result = await Process.run('ffprobe', [
+    final result = await runCommand('ffprobe', [
       '-v',
       'error',
       '-show_streams',
@@ -33,7 +35,7 @@ class VideoMedia {
       '-of',
       'json',
       path,
-    ]);
+    ], timeout: const Duration(seconds: 10));
     if (result.exitCode != 0) {
       throw StateError('Could not read video details. ${result.stderr}'.trim());
     }

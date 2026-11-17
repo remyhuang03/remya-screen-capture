@@ -5,6 +5,7 @@ use image::{
 };
 use std::io::Cursor;
 use std::process::Command;
+use std::time::Duration;
 
 pub(crate) fn output_png(name: &str) -> Result<Vec<u8>> {
     ensure!(!name.is_empty(), "Select a display to capture");
@@ -30,10 +31,15 @@ pub(crate) fn scroll_frame(name: &str) -> Result<RgbaImage> {
 }
 
 fn grim<const N: usize>(arguments: [&str; N]) -> Result<Vec<u8>> {
-    let output = Command::new("grim")
-        .args(arguments)
-        .output()
-        .context("Could not launch grim. Install grim 1.5 or newer")?;
+    let mut command = Command::new("grim");
+    command.args(arguments);
+    let output = crate::process::capture(command, Duration::from_secs(10)).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!("Could not launch grim. Install grim 1.5 or newer")
+        } else {
+            anyhow::anyhow!("Screenshot failed (grim): {error}")
+        }
+    })?;
     ensure!(
         output.status.success(),
         "Screenshot failed (grim {}): {}",

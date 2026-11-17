@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
+
+import '../../process_command.dart';
 
 class CaptureMonitor {
   CaptureMonitor(Map<String, dynamic> data)
@@ -119,10 +120,10 @@ Future<List<Map<String, dynamic>>> _hyprlandList(String subject) async =>
     (await _hyprlandJson(subject) as List).cast<Map<String, dynamic>>();
 
 Future<Object?> _hyprlandJson(String subject) async {
-  final result = await Process.run('hyprctl', [
+  final result = await runCommand('hyprctl', [
     '-j',
     subject,
-  ]).timeout(const Duration(seconds: 3));
+  ], timeout: const Duration(seconds: 3));
   if (result.exitCode != 0) {
     throw StateError('Could not read Hyprland $subject: ${result.stderr}');
   }

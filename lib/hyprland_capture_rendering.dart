@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'process_command.dart';
 
 class HyprlandCaptureRendering {
   HyprlandCaptureRendering._(this._hex, this._noHardwareCursors);
@@ -72,10 +72,11 @@ end
 }
 
 Future<String> _hyprctl(List<String> arguments) async {
-  final result = await Process.run(
+  final result = await runCommand(
     'hyprctl',
     arguments,
-  ).timeout(const Duration(seconds: 5));
+    timeout: const Duration(seconds: 5),
+  );
   if (result.exitCode != 0) {
     throw StateError(
       'hyprctl exited with ${result.exitCode}. ${result.stderr}',
