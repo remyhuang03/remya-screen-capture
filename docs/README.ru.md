@@ -34,26 +34,24 @@
 
 ## 🚀 Установка
 
-### Установка через AUR
-
-Установите [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` для общих тем и настроек. В AUR доступны исходный пакет `remya-screen-capture` и готовый бинарный пакет `remya-screen-capture-bin`. Оба зависят от `remya-core`.
+### 1a. Установка через AUR
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
 ```
 
-### Установка из архива выпуска
+### 1b. Установка из архива выпуска
 
 Для ручной установки сначала установите Core, затем загрузите архив x86_64 и `SHA256SUMS` со страницы [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases).
 
 ```bash
 sha256sum -c SHA256SUMS
-tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
-cd remya_screen_capture-0.2.0-linux-x86_64
+tar --zstd -xf remya_screen_capture-0.3.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.3.0-linux-x86_64
 python tool/install.py
 ```
 
-### Горячие клавиши Hyprland
+### 2. Горячие клавиши Hyprland
 
 Добавьте привязки клавиш в конфигурацию Hyprland (укажите абсолютный путь к исполняемому файлу, если `~/.local/bin` отсутствует в `PATH` сессии):
 
@@ -91,7 +89,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 </p>
 
 - **Аннотации в реальном времени**: инструменты маркера и лазерной указки прямо во время записи.
-- **Встроенный видеоредактор и экспорт**: покадровый предпросмотр и точная обрезка; экспорт в MP4, WebM, GIF или MKV со сведением дорожек системного звука и микрофона.
+- **Встроенный видеоредактор и экспорт**: покадровый предпросмотр и точная обрезка; экспорт в MP4, WebM, GIF или MKV. MP4, WebM и MKV поддерживают сведение дорожек системного звука и микрофона.
 
 ### Пипетка цвета
 
@@ -105,9 +103,9 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 ### Стек технологий и архитектура
 
-- **Flutter**: версия `3.47.9` (зафиксирована через FVM) с Material Design 3 Expressive (`material_ui: ^1.5.0`).
+- **Flutter**: версия зафиксирована через FVM, используется Material Design 3 Expressive (`material_ui`).
 - **Rust**: редакция `2024`, управляется как Cargo workspace с корневым `rust-toolchain.toml`.
-- **FFI**: `flutter_rust_bridge` `2.13.0`. В сборку для Linux включена библиотека захвата на Rust.
+- **FFI**: `flutter_rust_bridge`. В сборку для Linux включена библиотека захвата на Rust.
 - **Запись и видео**: системный GPU Screen Recorder для захвата, libmpv для предпросмотра и FFmpeg для экспорта.
 - Общие темы и настройки записи и выбора цвета используют `remya_client` и `remya_ui` из Remya Core. Чтобы открыть окно настроек, выполните `remya_screen_capture --settings`.
 - **Структура**:
@@ -131,7 +129,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- Соседняя копия `../remya-core` на теге `v0.1.0` с пакетами `packages/remya_client` и `packages/remya_ui`.
+- Соседняя копия `../remya-core` на теге `v0.2.0` с пакетами `packages/remya_client` и `packages/remya_ui`.
 
 ```bash
 fvm install

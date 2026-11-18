@@ -34,26 +34,24 @@ Eine moderne, elegante Oberfläche auf Basis von **Material Design 3 Expressive*
 
 ## 🚀 Installation
 
-### Installation über das AUR
-
-Installieren Sie [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` für gemeinsame Designs und Einstellungen. Im AUR stehen das Quellpaket `remya-screen-capture` und das Binärpaket `remya-screen-capture-bin` zur Auswahl. Beide hängen von `remya-core` ab.
+### 1a. Installation über das AUR
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
 ```
 
-### Installation aus einem Release-Archiv
+### 1b. Installation aus einem Release-Archiv
 
 Installieren Sie bei manueller Installation zuerst Core. Laden Sie dann das x86_64-Archiv und `SHA256SUMS` von [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases) herunter.
 
 ```bash
 sha256sum -c SHA256SUMS
-tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
-cd remya_screen_capture-0.2.0-linux-x86_64
+tar --zstd -xf remya_screen_capture-0.3.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.3.0-linux-x86_64
 python tool/install.py
 ```
 
-### Hyprland-Tastenkürzel
+### 2. Hyprland-Tastenkürzel
 
 Fügen Sie diese Tastenkombinationen Ihrer Hyprland-Konfiguration hinzu (verwenden Sie den absoluten Pfad zur ausführbaren Datei, falls `~/.local/bin` nicht im `PATH` der Sitzung liegt):
 
@@ -91,7 +89,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 </p>
 
 - **Live-Anmerkungen während der Aufnahme**: Unterstützt Markierstift und Laserpointer direkt während der Aufzeichnung.
-- **Integrierter Videoschnitt & Multi-Format-Export**: Bildgenaue Vorschau und exaktes Zuschneiden; Export nach MP4, WebM, GIF oder MKV inklusive Abmischung getrennter System- und Mikrofonspuren.
+- **Integrierter Videoschnitt & Multi-Format-Export**: Bildgenaue Vorschau und exaktes Zuschneiden; Export nach MP4, WebM, GIF oder MKV. MP4, WebM und MKV unterstützen das Abmischen von Systemton und Mikrofonspuren.
 
 ### Farbwähler
 
@@ -105,9 +103,9 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 ### Technologie-Stack & Architektur
 
-- **Flutter**: `3.47.9` via FVM fixiert, mit Material Design 3 Expressive (`material_ui: ^1.5.0`).
+- **Flutter**: via FVM fixiert, mit Material Design 3 Expressive (`material_ui`).
 - **Rust**: Edition `2024`, verwaltet als Cargo-Workspace über `rust-toolchain.toml`.
-- **FFI**: `flutter_rust_bridge` `2.13.0`. Der Linux-Build bündelt die Rust-Screenshot-Bibliothek.
+- **FFI**: `flutter_rust_bridge`. Der Linux-Build bündelt die Rust-Screenshot-Bibliothek.
 - **Aufnahme & Video**: Systemweiter GPU Screen Recorder für die Aufnahme, libmpv für die Vorschau und FFmpeg für den Export.
 - Gemeinsame Designs sowie Einstellungen für Aufnahmen und Farbauswahl verwenden `remya_client` und `remya_ui` aus Remya Core. Öffnen Sie das Einstellungsfenster mit `remya_screen_capture --settings`.
 - **Struktur**:
@@ -131,7 +129,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- Ein benachbarter Checkout `../remya-core` auf `v0.1.0` mit `packages/remya_client` und `packages/remya_ui`.
+- Ein benachbarter Checkout `../remya-core` auf `v0.2.0` mit `packages/remya_client` und `packages/remya_ui`.
 
 ```bash
 fvm install

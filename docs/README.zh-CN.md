@@ -34,26 +34,24 @@
 
 ## 🚀 安装
 
-### 通过 AUR 安装
-
-安装 [Remya Core](https://github.com/remyhuang03/remya-core) `0.1.0` 以使用共享主题和偏好设置。AUR 提供源码包 `remya-screen-capture` 和预编译包 `remya-screen-capture-bin`，两者均依赖 `remya-core`。
+### 1a. 通过 AUR 安装
 
 ```bash
 paru -S remya-screen-capture || yay -S remya-screen-capture
 ```
 
-### 从发布归档安装
+### 1b. 从发布归档安装
 
 手动安装时，请先安装 Core，再从 [GitHub Releases](https://github.com/remyhuang03/remya-screen-capture/releases) 下载 x86_64 归档和 `SHA256SUMS`。
 
 ```bash
 sha256sum -c SHA256SUMS
-tar --zstd -xf remya_screen_capture-0.2.0-linux-x86_64.tar.zst
-cd remya_screen_capture-0.2.0-linux-x86_64
+tar --zstd -xf remya_screen_capture-0.3.0-linux-x86_64.tar.zst
+cd remya_screen_capture-0.3.0-linux-x86_64
 python tool/install.py
 ```
 
-### Hyprland 快捷键配置
+### 2. Hyprland 快捷键配置
 
 将快捷键绑定添加到 Hyprland 配置中（若 `~/.local/bin` 不在会话的 `PATH` 中，请填写可执行文件的绝对路径），以下为配置示例：
 
@@ -91,7 +89,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 </p>
 
 - **录制中实时标注**：支持录屏过程中使用画笔与激光笔工具。
-- **内置视频剪辑与多格式导出**：支持逐帧步进预览与精确区间裁剪；支持导出为 MP4、WebM、GIF 或 MKV，并可将独立的系统音频与麦克风音轨混合输出。
+- **内置视频剪辑与多格式导出**：支持逐帧步进预览与精确区间裁剪；支持导出为 MP4、WebM、GIF 或 MKV。MP4、WebM 和 MKV 可混合输出系统音频与麦克风音轨。
 
 ### 取色器
 
@@ -105,9 +103,9 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 ### 技术栈与架构
 
-- **Flutter**：通过 FVM 锁定为 `3.47.9`，采用 Material Design 3 Expressive（`material_ui: ^1.5.0`）。
+- **Flutter**：通过 FVM 锁定，采用 Material Design 3 Expressive（`material_ui`）。
 - **Rust**：`2024` edition，通过根目录 `rust-toolchain.toml` 以 Cargo workspace 管理。
-- **FFI**：`flutter_rust_bridge` `2.13.0`，Linux 构建会打包 Rust 截图库。
+- **FFI**：`flutter_rust_bridge`，Linux 构建会打包 Rust 截图库。
 - **录屏与视频**：使用系统 GPU Screen Recorder 采集画面，libmpv 进行预览，FFmpeg 负责导出。
 - 共享主题以及录屏和取色偏好通过 Remya Core 的 `remya_client` 与 `remya_ui` 提供。运行 `remya_screen_capture --settings` 打开设置窗口。
 - **目录结构**：
@@ -131,7 +129,7 @@ sudo pacman -S grim wl-clipboard gtk-layer-shell wayland wayland-protocols inter
 sudo pacman -S gpu-screen-recorder ffmpeg mpv libepoxy
 ```
 
-- 此版本需要同级的 `../remya-core` 仓库检出 `v0.1.0`，以提供 `packages/remya_client` 和 `packages/remya_ui`。
+- 此版本需要同级的 `../remya-core` 仓库检出 `v0.2.0`，以提供 `packages/remya_client` 和 `packages/remya_ui`。
 
 ```bash
 fvm install
