@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: remyhuang03/remya-core
-          ref: c85db17dc41ebc4c154c10feca293efa51ec59ec
+          ref: 22abdc661f30a33a05a6ea93bf4d1abff5bb313b
           path: source/remya-core
           persist-credentials: false
 
