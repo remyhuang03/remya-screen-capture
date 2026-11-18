@@ -248,13 +248,10 @@ class _CaptureDropdownState<T extends Object>
       childFocusNode: _focus,
       menuChildren: [
         for (final option in options.entries)
-          MenuItemButton(
-            autofocus: option.key == widget.value,
+          _CaptureDropdownMenuItem(
+            label: option.value,
+            selected: option.key == widget.value,
             onPressed: () => widget.onChanged?.call(option.key),
-            child: Semantics(
-              selected: option.key == widget.value,
-              child: Text(option.value),
-            ),
           ),
       ],
       builder: (context, controller, child) => Semantics(
@@ -294,6 +291,48 @@ class _CaptureDropdownState<T extends Object>
       ),
     );
   }
+}
+
+class _CaptureDropdownMenuItem extends StatefulWidget {
+  const _CaptureDropdownMenuItem({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  State<_CaptureDropdownMenuItem> createState() =>
+      _CaptureDropdownMenuItemState();
+}
+
+class _CaptureDropdownMenuItemState extends State<_CaptureDropdownMenuItem> {
+  late final _states = WidgetStatesController({if (widget.selected) .selected});
+
+  @override
+  void didUpdateWidget(_CaptureDropdownMenuItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected != widget.selected) {
+      _states.update(.selected, widget.selected);
+    }
+  }
+
+  @override
+  void dispose() {
+    _states.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MenuItemButton(
+    autofocus: widget.selected,
+    statesController: _states,
+    onPressed: widget.onPressed,
+    child: Semantics(selected: widget.selected, child: Text(widget.label)),
+  );
 }
 
 class _ButtonLabel extends StatelessWidget {

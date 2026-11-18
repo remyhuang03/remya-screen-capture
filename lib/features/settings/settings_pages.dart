@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:remya_ui/settings_ui.dart';
 
-import '../capture_controls/capture_buttons.dart';
 import '../color_picker/color_data.dart';
 import '../recording/recording_backend.dart';
 import 'preference_controller.dart';
@@ -77,26 +76,26 @@ class ColorPickerSettingsPage extends StatelessWidget {
           children: [
             _Row(
               title: 'After picking',
-              trailing: CaptureDropdown<ColorPickAction>(
+              trailing: SettingsChoice<ColorPickAction>(
                 label: 'After picking',
-                options: const {
+                choices: const {
                   ColorPickAction.copyAndOpen: 'Copy and open panel',
                   ColorPickAction.copyOnly: 'Copy only',
                   ColorPickAction.openOnly: 'Open panel without copying',
                 },
-                value: preferences.action,
-                onChanged: write == null
+                selected: preferences.action,
+                onSelected: write == null
                     ? null
                     : (value) => write(change(action: value)),
               ),
             ),
             _Row(
               title: 'Default copy format',
-              trailing: CaptureDropdown<ColorFormat>(
+              trailing: SettingsDropdown<ColorFormat>(
                 label: 'Default copy format',
-                options: {for (final format in enabled) format: format.label},
-                value: preferences.defaultFormat,
-                onChanged: write == null
+                choices: {for (final format in enabled) format: format.label},
+                selected: preferences.defaultFormat,
+                onSelected: write == null
                     ? null
                     : (value) => write(change(defaultFormat: value)),
               ),
@@ -104,16 +103,13 @@ class ColorPickerSettingsPage extends StatelessWidget {
             if (enabled.contains(ColorFormat.hex))
               _Row(
                 title: 'HEX case',
-                trailing: SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: true, label: Text('Upper')),
-                    ButtonSegment(value: false, label: Text('Lower')),
-                  ],
-                  selected: {preferences.uppercase},
-                  onSelectionChanged: write == null
+                trailing: SettingsChoice<bool>(
+                  label: 'HEX case',
+                  choices: const {true: 'Upper', false: 'Lower'},
+                  selected: preferences.uppercase,
+                  onSelected: write == null
                       ? null
-                      : (value) => write(change(uppercase: value.single)),
+                      : (value) => write(change(uppercase: value)),
                 ),
               ),
           ],
