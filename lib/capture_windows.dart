@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'app.dart';
 
 const captureWindows = MethodChannel('top.remya.screen_capture/windows');
+const captureSessions = MethodChannel('top.remya.screen_capture/sessions');
 
 Future<int> openCaptureWindow(String role, {String? output}) async =>
     (await captureWindows.invokeMethod<int>('open', {

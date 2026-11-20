@@ -26,7 +26,9 @@ enum _Phase {
 }
 
 class RecordingHost extends StatefulWidget {
-  const RecordingHost({super.key});
+  const RecordingHost({super.key, this.onFinished});
+
+  final Future<void> Function()? onFinished;
 
   @override
   State<RecordingHost> createState() => _RecordingHostState();
@@ -624,7 +626,12 @@ class _RecordingHostState extends State<RecordingHost>
     await _closeSetup();
     await _closeHud();
     await _releaseSession();
-    await captureWindows.invokeMethod<void>('quit');
+    final finish = widget.onFinished;
+    if (!_exitRequested && finish != null) {
+      await finish();
+    } else {
+      await captureWindows.invokeMethod<void>('quit');
+    }
   }
 }
 

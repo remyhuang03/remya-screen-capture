@@ -8,6 +8,7 @@ import tempfile
 
 APP_ID = "remya_screen_capture"
 PACKAGE = "top.remya.screen_capture"
+GUI_UNIT = f"{PACKAGE}.gui.service"
 
 
 def data_home(environment):
@@ -25,6 +26,30 @@ def desktop_quote(path):
     for character in ('\\', '"', '`', '$'):
         value = value.replace(character, "\\" + character)
     return '"' + value.replace("\\", "\\\\") + '"'
+
+
+def install_gui_unit(data, executable):
+    if not shutil.which("systemctl"):
+        return
+    units = data / "systemd/user"
+    units.mkdir(parents=True, exist_ok=True)
+    path = str(executable).replace("\\", "\\\\").replace('"', '\\"')
+    path = path.replace("%", "%%").replace("$", "$$")
+    (units / GUI_UNIT).write_text(
+        "[Unit]\nDescription=Remya Screen Capture prewarm\n"
+        "PartOf=graphical-session.target\nWants=top.remya.core.service\n"
+        "After=graphical-session.target top.remya.core.service\n\n"
+        "[Service]\nType=exec\n"
+        f'ExecStart="{path}" --background\n'
+        "Restart=on-failure\nRestartSec=2\nUMask=0077\nLimitCORE=0\n\n"
+        "[Install]\nWantedBy=graphical-session.target\n"
+    )
+    systemctl = ["systemctl", "--user"]
+    subprocess.run([*systemctl, "enable", str(units / GUI_UNIT)], check=True)
+    if subprocess.run(
+        [*systemctl, "is-active", "--quiet", "graphical-session.target"]
+    ).returncode == 0:
+        subprocess.run([*systemctl, "start", GUI_UNIT], check=True)
 
 
 def require_inter_font():
@@ -56,7 +81,10 @@ def install(root, environment):
         except (OSError, RuntimeError):
             continue
         if executable.is_relative_to(destination):
-            raise RuntimeError(f"Stop {APP_ID} before updating its installed bundle")
+            raise RuntimeError(
+                f"Close {APP_ID} and stop its background service before updating "
+                f"(systemctl --user stop {GUI_UNIT})"
+            )
     home = environment.get("HOME", "")
     if not home.startswith("/"):
         raise ValueError("An absolute HOME is required for ~/.local/bin")
@@ -96,6 +124,7 @@ def install(root, environment):
         command.symlink_to(destination / APP_ID)
     if shutil.which("update-desktop-database"):
         subprocess.run(["update-desktop-database", str(applications)], check=True)
+    install_gui_unit(data, destination / APP_ID)
     print(f"Installed {PACKAGE} in {destination}")
     print(f"Command: {command} (add ~/.local/bin to PATH if needed)")
 

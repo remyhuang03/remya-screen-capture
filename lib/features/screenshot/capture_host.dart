@@ -25,9 +25,10 @@ import 'capture_result.dart';
 import 'capture_session.dart';
 
 class CaptureHost extends StatefulWidget {
-  const CaptureHost({super.key, this.initialMode = .region});
+  const CaptureHost({super.key, this.initialMode = .region, this.onFinished});
 
   final CaptureMode initialMode;
+  final Future<void> Function()? onFinished;
 
   @override
   State<CaptureHost> createState() => _CaptureHostState();
@@ -44,7 +45,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   int? _colorSettingsView;
   Timer? _colorToastTimer;
   Future<List<Uint8List>>? _freezing;
-  late final Future<void> _backend = _initializeBackend();
+  static final Future<void> _backend = _initializeBackend();
   RandomAccessFile? _captureLock;
   CaptureSession? _session;
   _ScrollRun? _scrollRun;
@@ -68,7 +69,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     unawaited(_start());
   }
 
-  Future<void> _initializeBackend() async {
+  static Future<void> _initializeBackend() async {
     final bundle = File(Platform.resolvedExecutable).parent.path;
     await ScreenshotRustLib.init(
       externalLibrary: ExternalLibrary.open('$bundle/lib/libremya_capture.so'),
@@ -133,6 +134,9 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       if (!await _lockCapture()) {
         await _quit();
         return;
+      }
+      if (widget.onFinished != null) {
+        await captureWindows.invokeMethod<void>('prefetch');
       }
       final editor = _editorView;
       if (_errorVisible && editor != null) {
@@ -1168,7 +1172,13 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     } catch (error) {
       debugPrint(_message(error));
     }
-    await captureWindows.invokeMethod<void>('quit');
+    if (widget.onFinished case final finish?) {
+      await _endCapture();
+      await _releaseCaptureLock();
+      await finish();
+    } else {
+      await captureWindows.invokeMethod<void>('quit');
+    }
   }
 
   Future<void> _removeView(int id) async {

@@ -14,6 +14,21 @@ SPEC.loader.exec_module(installer)
 
 
 class InstallTest(unittest.TestCase):
+    def test_prewarms_capture_own_unit_in_graphical_session(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+            installer.shutil, "which", return_value="/usr/bin/systemctl"
+        ), patch.object(installer.subprocess, "run") as run:
+            data = Path(temporary)
+            executable = data / 'Remya Capture %i' / installer.APP_ID
+            run.return_value.returncode = 0
+            installer.install_gui_unit(data, executable)
+            unit = data / "systemd/user" / installer.GUI_UNIT
+            self.assertIn(f'ExecStart="{str(executable).replace("%", "%%")}" --background', unit.read_text())
+            self.assertIn("WantedBy=graphical-session.target", unit.read_text())
+            self.assertEqual(run.call_args.args[0], [
+                "systemctl", "--user", "start", "top.remya.screen_capture.gui.service"
+            ])
+
     def test_core_requirement_registration_and_settings_action(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

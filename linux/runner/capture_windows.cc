@@ -5,17 +5,26 @@
 #include <gtk-layer-shell.h>
 #include <wayland-client.h>
 
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "capture_plugins.h"
+#include "my_application.h"
 #include "xdg-output-client-protocol.h"
 
 namespace {
 
 constexpr char kHostKey[] = "remya-capture-windows";
+constexpr char kResidentPath[] = "/top/remya/screen_capture/Resident";
+constexpr char kResidentApi[] =
+    "<node><interface name='" APPLICATION_ID ".Resident'>"
+    "<method name='Open'>"
+    "<arg type='s' direction='in'/><arg type='s' direction='in'/>"
+    "<arg type='b' direction='out'/>"
+    "</method></interface></node>";
 
 using OutputNames = std::map<std::string, GdkMonitor*>;
 using InputRegion =
@@ -138,13 +147,25 @@ void error(FlMethodCall* call, const char* code, const char* message) {
   fl_method_call_respond_error(call, code, message, nullptr, nullptr);
 }
 
+void queue_allocation(GtkWidget* widget, gpointer) {
+  gtk_widget_queue_allocate(widget);
+  if (GTK_IS_CONTAINER(widget)) {
+    gtk_container_forall(GTK_CONTAINER(widget), queue_allocation, nullptr);
+  }
+}
+
 class CaptureWindows {
  public:
   CaptureWindows(GtkApplication* application, char** arguments)
-      : application_(application), display_(gdk_display_get_default()) {
+      : application_(application),
+        display_(gdk_display_get_default()),
+        resident_(g_str_equal(g_application_get_application_id(
+                                  G_APPLICATION(application)),
+                              kResidentCaptureId)) {
     g_application_hold(G_APPLICATION(application_));
 
     g_autoptr(FlDartProject) project = fl_dart_project_new();
+    if (resident_) fl_dart_project_set_enable_impeller(project, FALSE);
     fl_dart_project_set_dart_entrypoint_arguments(project, arguments);
     bootstrap_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     g_object_ref_sink(bootstrap_);
@@ -157,6 +178,11 @@ class CaptureWindows {
     channel_ = fl_method_channel_new(fl_engine_get_binary_messenger(engine_),
                                      APPLICATION_ID "/windows",
                                      FL_METHOD_CODEC(codec));
+    if (resident_) {
+      sessions_ = fl_method_channel_new(fl_engine_get_binary_messenger(engine_),
+                                        APPLICATION_ID "/sessions",
+                                        FL_METHOD_CODEC(codec));
+    }
     fl_method_channel_set_method_call_handler(channel_, method_call, this,
                                               nullptr);
     g_signal_connect(display_, "monitor-added", G_CALLBACK(monitor_added),
@@ -174,6 +200,10 @@ class CaptureWindows {
   }
 
   ~CaptureWindows() {
+    if (resident_object_ != 0) {
+      g_dbus_connection_unregister_object(bus_, resident_object_);
+    }
+    g_clear_object(&bus_);
     g_signal_handlers_disconnect_by_data(display_, this);
     for (int i = 0; i < gdk_display_get_n_monitors(display_); ++i) {
       g_signal_handlers_disconnect_by_data(gdk_display_get_monitor(display_, i),
@@ -181,6 +211,7 @@ class CaptureWindows {
     }
     fl_method_channel_set_method_call_handler(channel_, nullptr, nullptr,
                                               nullptr);
+    g_clear_object(&sessions_);
     g_clear_object(&channel_);
     while (!windows_.empty()) {
       gtk_widget_destroy(windows_.begin()->second->window);
@@ -215,6 +246,7 @@ class CaptureWindows {
     }
 
     void show() {
+      if (host->resident_) queue_allocation(GTK_WIDGET(view), nullptr);
       if (!is_layer() && !has_first_frame) {
         show_after_first_frame = true;
         gtk_widget_show(GTK_WIDGET(view));
@@ -229,7 +261,28 @@ class CaptureWindows {
 
     void hide() {
       show_after_first_frame = false;
+      const bool was_mapped = gtk_widget_get_mapped(window);
       gtk_widget_hide(window);
+      if (host->resident_ && was_mapped) {
+        // Release EGL's old Wayland subsurface while retaining the Flutter view.
+        auto* widget = GTK_WIDGET(view);
+        queue_allocation(widget, nullptr);
+        GtkAllocation allocation;
+        gtk_widget_get_allocation(widget, &allocation);
+        gtk_widget_size_allocate(widget, &allocation);
+      }
+    }
+
+    void deactivate() {
+      hide();
+      active = false;
+      drag_time = GDK_CURRENT_TIME;
+      input_region.reset();
+      if (is_layer()) {
+        gtk_layer_set_keyboard_mode(GTK_WINDOW(window),
+                                    GTK_LAYER_SHELL_KEYBOARD_MODE_NONE);
+        gtk_layer_set_monitor(GTK_WINDOW(window), nullptr);
+      }
     }
   };
 
@@ -237,9 +290,85 @@ class CaptureWindows {
     static_cast<CaptureWindows*>(data)->handle(call);
   }
 
+  static void open_resident(GDBusConnection*, const gchar*, const gchar*,
+                            const gchar*, const gchar*, GVariant* parameters,
+                            GDBusMethodInvocation* invocation, gpointer data) {
+    auto* self = static_cast<CaptureWindows*>(data);
+    const char* mode = nullptr;
+    const char* compositor = nullptr;
+    g_variant_get(parameters, "(&s&s)", &mode, &compositor);
+    const bool valid = *compositor != '\0' &&
+        g_strcmp0(compositor, g_getenv("HYPRLAND_INSTANCE_SIGNATURE")) == 0 &&
+        (g_str_equal(mode, "screenshot") || g_str_equal(mode, "recording") ||
+         g_str_equal(mode, "colorPicker"));
+    if (!valid) {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", FALSE));
+      return;
+    }
+    g_autoptr(FlValue) args = fl_value_new_string(mode);
+    fl_method_channel_invoke_method(
+        self->sessions_, "startSession", args, nullptr,
+        +[](GObject* channel, GAsyncResult* result, gpointer data) {
+          g_autoptr(FlMethodResponse) response =
+              fl_method_channel_invoke_method_finish(FL_METHOD_CHANNEL(channel),
+                                                    result, nullptr);
+          FlValue* value = FL_IS_METHOD_SUCCESS_RESPONSE(response)
+              ? fl_method_success_response_get_result(
+                    FL_METHOD_SUCCESS_RESPONSE(response))
+              : nullptr;
+          const bool accepted = value != nullptr &&
+              fl_value_get_type(value) == FL_VALUE_TYPE_BOOL &&
+              fl_value_get_bool(value);
+          g_dbus_method_invocation_return_value(
+              G_DBUS_METHOD_INVOCATION(data), g_variant_new("(b)", accepted));
+        },
+        invocation);
+  }
+
+  void register_resident(FlMethodCall* call) {
+    if (resident_object_ != 0) {
+      success(call);
+      return;
+    }
+    auto* bus = g_application_get_dbus_connection(G_APPLICATION(application_));
+    if (bus == nullptr) {
+      error(call, "bus-unavailable", "The graphical session bus is unavailable.");
+      return;
+    }
+    static const GDBusInterfaceVTable vtable = {open_resident, nullptr, nullptr, {}};
+    g_autoptr(GDBusNodeInfo) info =
+        g_dbus_node_info_new_for_xml(kResidentApi, nullptr);
+    g_autoptr(GError) failure = nullptr;
+    resident_object_ = g_dbus_connection_register_object(
+        bus, kResidentPath, info->interfaces[0], &vtable, this, nullptr, &failure);
+    if (resident_object_ == 0) {
+      error(call, "registration-failed", failure->message);
+      return;
+    }
+    bus_ = G_DBUS_CONNECTION(g_object_ref(bus));
+    success(call);
+  }
+
   void handle(FlMethodCall* call) {
     const char* method = fl_method_call_get_name(call);
     FlValue* args = fl_method_call_get_args(call);
+    if (resident_ && g_str_equal(method, "residentReady")) {
+      register_resident(call);
+      return;
+    }
+    if (resident_ && g_str_equal(method, "finishSession")) {
+      for (auto& entry : windows_) {
+        if (entry.second->active) entry.second->deactivate();
+      }
+      gdk_display_sync(display_);
+      success(call);
+      return;
+    }
+    if (resident_ && g_str_equal(method, "prefetch")) {
+      prefetch_capture_snapshot();
+      success(call);
+      return;
+    }
     if (g_str_equal(method, "outputs")) {
       const auto names = get_named_outputs(display_);
       if (names.empty()) {
@@ -271,9 +400,9 @@ class CaptureWindows {
       return;
     }
     if (g_str_equal(method, "quit")) {
-      success(call);
-      g_application_quit(G_APPLICATION(application_));
-      return;
+      // shortcut: let the OS dispose the views at process exit until Flutter's
+      // GTK embedder can destroy views while the raster thread is still active.
+      std::_Exit(EXIT_SUCCESS);
     }
 
     int64_t id;
@@ -298,15 +427,7 @@ class CaptureWindows {
       // shortcut: retain hidden views until shutdown, destroy them sooner
       // when Flutter's GTK view disposal can safely overlap raster work.
       const bool was_mapped = gtk_widget_get_mapped(window.window);
-      window.hide();
-      window.active = false;
-      window.drag_time = GDK_CURRENT_TIME;
-      window.input_region.reset();
-      if (window.is_layer()) {
-        gtk_layer_set_keyboard_mode(GTK_WINDOW(window.window),
-                                    GTK_LAYER_SHELL_KEYBOARD_MODE_NONE);
-        gtk_layer_set_monitor(GTK_WINDOW(window.window), nullptr);
-      }
+      window.deactivate();
       if (was_mapped) gdk_display_sync(display_);
       emit("closed", window.id);
       success(call);
@@ -552,13 +673,31 @@ class CaptureWindows {
 
   GtkApplication* application_;
   GdkDisplay* display_;
+  const bool resident_;
+  GDBusConnection* bus_ = nullptr;
+  guint resident_object_ = 0;
   GtkWidget* bootstrap_ = nullptr;
   FlEngine* engine_ = nullptr;
   FlMethodChannel* channel_ = nullptr;
+  FlMethodChannel* sessions_ = nullptr;
   std::map<int64_t, std::unique_ptr<Window>> windows_;
 };
 
 }  // namespace
+
+bool forward_resident_capture(const char* mode) {
+  const char* compositor = g_getenv("HYPRLAND_INSTANCE_SIGNATURE");
+  if (compositor == nullptr || *compositor == '\0') return false;
+  g_autoptr(GDBusConnection) bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
+  if (bus == nullptr) return false;
+  g_autoptr(GVariant) reply = g_dbus_connection_call_sync(
+      bus, kResidentCaptureId, kResidentPath, kResidentCaptureId, "Open",
+      g_variant_new("(ss)", mode, compositor), G_VARIANT_TYPE("(b)"),
+      G_DBUS_CALL_FLAGS_NO_AUTO_START, 250, nullptr, nullptr);
+  gboolean accepted = FALSE;
+  if (reply != nullptr) g_variant_get(reply, "(b)", &accepted);
+  return accepted;
+}
 
 void start_capture_windows(GtkApplication* application, char** arguments) {
   if (g_object_get_data(G_OBJECT(application), kHostKey) != nullptr) return;

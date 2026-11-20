@@ -17,12 +17,27 @@
       "keywords": []
     },
     {
+      "id": "startup",
+      "title": "Startup",
+      "keywords": ["startup", "fast", "background"]
+    },
+    {
       "id": "material-theme",
       "title": "Material theme",
       "keywords": []
     }
   ],
   "settings": {
+    "resident-startup": {
+      "title": "Startup mode",
+      "page": "startup",
+      "keywords": ["startup", "fast", "background"],
+      "default": false,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "boolean"
+      }
+    },
     "recording": {
       "title": "Recording",
       "page": "recording",

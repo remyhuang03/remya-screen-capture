@@ -11,6 +11,7 @@ import '../color_picker/color_data.dart';
 import '../recording/recording_backend.dart';
 import 'preference_controller.dart';
 import 'settings_pages.dart';
+import 'startup_mode.dart';
 
 /// App-owned pages from linux/packaging/remya-screen-capture.json.
 const settingsPages = [
@@ -24,6 +25,12 @@ const settingsPages = [
     id: 'color-picker',
     title: 'Color picker',
     icon: Icons.colorize_rounded,
+    category: RemyaSettingsCategory.system,
+  ),
+  (
+    id: 'startup',
+    title: 'Startup',
+    icon: Icons.bolt_rounded,
     category: RemyaSettingsCategory.system,
   ),
 ];
@@ -94,7 +101,15 @@ class _SettingsWindowState extends State<SettingsWindow> {
       : null;
   late final AppPreferences _preferences =
       widget.preferences ??
-      AppPreferences('remya-screen-capture', client: _client);
+      AppPreferences(capturePreferencesId, client: _client);
+  late final _startup = PreferenceController<bool>(
+    preferences: _preferences,
+    key: residentStartupKey,
+    parse: (value) => value as bool,
+    save: (value) => widget.preferences == null
+        ? saveResidentStartup(_preferences, value)
+        : _preferences.set(residentStartupKey, value),
+  )..start();
   late final _recording = PreferenceController<RecordingOptions>(
     preferences: _preferences,
     key: 'recording',
@@ -120,6 +135,7 @@ class _SettingsWindowState extends State<SettingsWindow> {
       if (!available) return;
       _recording.start();
       _colorPicker.start();
+      _startup.start();
     });
   }
 
@@ -128,6 +144,7 @@ class _SettingsWindowState extends State<SettingsWindow> {
     _service?.cancel();
     _recording.dispose();
     _colorPicker.dispose();
+    _startup.dispose();
     _client?.close();
     super.dispose();
   }
@@ -135,6 +152,7 @@ class _SettingsWindowState extends State<SettingsWindow> {
   PreferenceController<Object>? get _controller => switch (_page) {
     'recording' => _recording,
     'color-picker' => _colorPicker,
+    'startup' => _startup,
     _ => null,
   };
 
@@ -142,7 +160,7 @@ class _SettingsWindowState extends State<SettingsWindow> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([_recording, _colorPicker]),
+    listenable: Listenable.merge([_recording, _colorPicker, _startup]),
     builder: (context, _) {
       final controller = _controller;
       return RemyaSettingsScaffold(
@@ -161,6 +179,7 @@ class _SettingsWindowState extends State<SettingsWindow> {
               category: page.category,
               builder: (_) => switch (page.id) {
                 'recording' => RecordingSettingsPage(_recording),
+                'startup' => StartupSettingsPage(_startup),
                 _ => ColorPickerSettingsPage(_colorPicker),
               },
             ),

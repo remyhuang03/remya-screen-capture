@@ -108,6 +108,31 @@ void main() {
     );
   });
 
+  testWidgets('startup mode saves only the Screen Capture preference', (
+    tester,
+  ) async {
+    await pump(tester, 'startup');
+    final choices = find.byType(SettingsSegmentedButton<bool>);
+    expect(
+      tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
+      false,
+    );
+    await tester.tap(find.text('Fast startup'));
+    await tester.pumpAndSettle();
+    expect(preferences.writes, ['resident-startup']);
+    expect(preferences.values['resident-startup'], true);
+    expect(
+      tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
+      true,
+    );
+    preferences.external('resident-startup', false);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
+      false,
+    );
+  });
+
   testWidgets(
     'defaults to recording and includes Material theme in navigation',
     (tester) async {

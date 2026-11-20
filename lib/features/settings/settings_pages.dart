@@ -5,6 +5,37 @@ import '../color_picker/color_data.dart';
 import '../recording/recording_backend.dart';
 import 'preference_controller.dart';
 
+class StartupSettingsPage extends StatelessWidget {
+  const StartupSettingsPage(this.controller, {super.key});
+
+  final PreferenceController<bool> controller;
+
+  @override
+  Widget build(BuildContext context) => _PreferencePage(
+    controller: controller,
+    builder: (resident, write) => [
+      SettingsGroup(
+        title: 'Startup',
+        children: [
+          SettingRow(
+            id: 'resident-startup',
+            label: const SettingLabel(
+              'Startup mode',
+              description:
+                  'Fast startup keeps Screen Capture ready in the background.',
+            ),
+            control: SettingsSegmentedButton<bool>.choices(
+              choices: const {false: 'On demand', true: 'Fast startup'},
+              selected: resident,
+              onSelected: write,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
 class RecordingSettingsPage extends StatelessWidget {
   const RecordingSettingsPage(this.controller, {super.key});
 

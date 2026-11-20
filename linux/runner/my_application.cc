@@ -128,7 +128,9 @@ static gboolean my_application_local_command_line(GApplication* application,
     return TRUE;
   }
 
-  g_application_activate(application);
+  if (!g_application_get_is_remote(application)) {
+    g_application_activate(application);
+  }
   *exit_status = 0;
   return TRUE;
 }
@@ -154,9 +156,13 @@ static void my_application_class_init(MyApplicationClass* klass) {
 
 static void my_application_init(MyApplication* self) {}
 
-MyApplication* my_application_new() {
+MyApplication* my_application_new(bool background) {
   g_set_prgname(APPLICATION_ID);
   return MY_APPLICATION(g_object_new(my_application_get_type(),
-                                     "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     "application-id",
+                                     background ? kResidentCaptureId : APPLICATION_ID,
+                                     "flags",
+                                     background ? G_APPLICATION_DEFAULT_FLAGS
+                                                : G_APPLICATION_NON_UNIQUE,
+                                     nullptr));
 }

@@ -16,6 +16,9 @@ G_DECLARE_FINAL_TYPE(MyApplication,
  *
  * Returns: a new #MyApplication.
  */
-MyApplication* my_application_new();
+MyApplication* my_application_new(bool background);
+
+// Starts a fresh snapshot only after the caller has acquired the capture lock.
+void prefetch_capture_snapshot();
 
 #endif  // FLUTTER_MY_APPLICATION_H_
