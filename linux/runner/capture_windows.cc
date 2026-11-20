@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "capture_plugins.h"
+#include "frozen_background.h"
 #include "my_application.h"
 #include "xdg-output-client-protocol.h"
 
@@ -238,7 +239,16 @@ class CaptureWindows {
     int drag_y = 0;
     InputRegion input_region{nullptr, cairo_region_destroy};
 
-    bool is_layer() const { return role != Role::editor; }
+    std::unique_ptr<FrozenBackground> background;
+    bool background_visible = true;
+
+    bool is_layer() const {
+      return role != Role::editor && role != Role::color_panel;
+    }
+
+    void update_background() const {
+      if (background) background->update(window, background_visible);
+    }
 
     void apply_input_region() const {
       gtk_widget_input_shape_combine_region(window, input_region.get());
@@ -256,12 +266,14 @@ class CaptureWindows {
       gtk_widget_show_all(window);
       // GTK's first map resets the Wayland region during realization.
       if (is_layer()) apply_input_region();
+      update_background();
       gtk_widget_grab_focus(GTK_WIDGET(view));
     }
 
     void hide() {
       show_after_first_frame = false;
       const bool was_mapped = gtk_widget_get_mapped(window);
+      if (background) background->unmap();
       gtk_widget_hide(window);
       if (host->resident_ && was_mapped) {
         // Release EGL's old Wayland subsurface while retaining the Flutter view.
@@ -278,6 +290,8 @@ class CaptureWindows {
       active = false;
       drag_time = GDK_CURRENT_TIME;
       input_region.reset();
+      background.reset();
+      background_visible = true;
       if (is_layer()) {
         gtk_layer_set_keyboard_mode(GTK_WINDOW(window),
                                     GTK_LAYER_SHELL_KEYBOARD_MODE_NONE);
@@ -431,6 +445,21 @@ class CaptureWindows {
       if (was_mapped) gdk_display_sync(display_);
       emit("closed", window.id);
       success(call);
+    } else if (g_str_equal(method, "setFrozenBackground")) {
+      FlValue* png = lookup(args, "png");
+      if (window.role != Role::overlay || png == nullptr ||
+          fl_value_get_type(png) != FL_VALUE_TYPE_UINT8_LIST) {
+        error(call, "bad-arguments", "Expected a PNG for a capture overlay.");
+        return;
+      }
+      if (!background_protocol_) {
+        background_protocol_ = std::make_unique<FrozenBackgroundProtocol>(display_);
+      }
+      window.background = background_protocol_->decode(
+          fl_value_get_uint8_list(png), fl_value_get_length(png));
+      window.update_background();
+      g_autoptr(FlValue) result = fl_value_new_bool(window.background != nullptr);
+      fl_method_call_respond_success(call, result, nullptr);
     } else if (g_str_equal(method, "input")) {
       set_input(call, args, window);
     } else if (g_str_equal(method, "beginMove")) {
@@ -460,7 +489,7 @@ class CaptureWindows {
     }
 
     GdkMonitor* monitor = nullptr;
-    if (!editor) {
+    if (!editor && !color_panel) {
       const auto names = get_named_outputs(display_);
       const auto found = names.find(string_at(args, "output"));
       if (found == names.end()) {
@@ -489,16 +518,23 @@ class CaptureWindows {
 
     auto* widget = gtk_application_window_new(application_);
     auto* window = GTK_WINDOW(widget);
-    gtk_window_set_title(window, "Remy'a Screen Capture");
+    gtk_window_set_title(window, color_panel ? "Remy'a Color Picker"
+                                             : "Remy'a Screen Capture");
     gtk_window_set_decorated(window, FALSE);
     auto* view = fl_view_new_for_engine(engine_);
     const int64_t id = fl_view_get_id(view);
     auto state = std::make_unique<Window>(Window{this, widget, view, id, role});
 
-    if (editor) {
-      gtk_window_set_default_size(window, 1280, 800);
-      gtk_widget_set_size_request(GTK_WIDGET(view), 480, 340);
-      register_capture_plugins(FL_PLUGIN_REGISTRY(view));
+    if (!state->is_layer()) {
+      int64_t height = 0;
+      if (!color_panel || !int_at(args, "height", &height) || height < 340 ||
+          height > 1200) {
+        height = color_panel ? 695 : 800;
+      }
+      gtk_window_set_default_size(window, color_panel ? 640 : 1280,
+                                  static_cast<int>(height));
+      gtk_widget_set_size_request(GTK_WIDGET(view), color_panel ? 540 : 480, 340);
+      if (editor) register_capture_plugins(FL_PLUGIN_REGISTRY(view));
       g_signal_connect(view, "first-frame", G_CALLBACK(editor_first_frame),
                        state.get());
       auto* gesture = gtk_gesture_multi_press_new(widget);
@@ -514,7 +550,6 @@ class CaptureWindows {
     } else {
       gtk_layer_init_for_window(window);
       const char* layer_namespace = overlay ? APPLICATION_ID "/overlay"
-          : color_panel ? APPLICATION_ID "/color-panel"
           : recording_setup ? APPLICATION_ID "/recording-setup"
           : recording_hud ? APPLICATION_ID "/recording-hud"
                           : APPLICATION_ID "/result";
@@ -533,10 +568,6 @@ class CaptureWindows {
       if (visual != nullptr) gtk_widget_set_visual(widget, visual);
       const GdkRGBA transparent = {0, 0, 0, 0};
       fl_view_set_background_color(view, &transparent);
-      if (color_panel) {
-        g_signal_connect(widget, "focus-out-event", G_CALLBACK(focus_lost),
-                         state.get());
-      }
     }
 
     g_signal_connect(widget, "destroy", G_CALLBACK(window_destroyed),
@@ -587,6 +618,15 @@ class CaptureWindows {
       }
     }
     window.input_region = std::move(region);
+    FlValue* frozen = lookup(args, "frozen");
+    if (window.role == Role::overlay && frozen != nullptr &&
+        fl_value_get_type(frozen) == FL_VALUE_TYPE_BOOL) {
+      const bool visible = fl_value_get_bool(frozen);
+      if (visible != window.background_visible) {
+        window.background_visible = visible;
+        window.update_background();
+      }
+    }
     if (gtk_widget_get_mapped(window.window)) window.apply_input_region();
     gtk_layer_set_keyboard_mode(GTK_WINDOW(window.window), keyboard);
     if (keyboard != GTK_LAYER_SHELL_KEYBOARD_MODE_NONE) {
@@ -643,14 +683,6 @@ class CaptureWindows {
     return TRUE;
   }
 
-  static gboolean focus_lost(GtkWidget* widget, GdkEventFocus*, gpointer data) {
-    const auto& window = *static_cast<Window*>(data);
-    if (window.active && gtk_widget_get_mapped(widget)) {
-      window.host->emit("focusLost", window.id);
-    }
-    return FALSE;
-  }
-
   static void window_destroyed(GtkWidget*, gpointer data) {
     const auto& window = *static_cast<Window*>(data);
     auto* self = window.host;
@@ -680,6 +712,7 @@ class CaptureWindows {
   FlEngine* engine_ = nullptr;
   FlMethodChannel* channel_ = nullptr;
   FlMethodChannel* sessions_ = nullptr;
+  std::unique_ptr<FrozenBackgroundProtocol> background_protocol_;
   std::map<int64_t, std::unique_ptr<Window>> windows_;
 };
 

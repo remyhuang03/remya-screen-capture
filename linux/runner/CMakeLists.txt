@@ -9,16 +9,20 @@ find_program(WAYLAND_SCANNER wayland-scanner)
 if(NOT WAYLAND_SCANNER OR NOT WAYLAND_PROTOCOLS_DIR)
   message(FATAL_ERROR "wayland-scanner and wayland-protocols are required")
 endif()
-set(XDG_OUTPUT_XML "${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-output/xdg-output-unstable-v1.xml")
-set(XDG_OUTPUT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/xdg-output-client-protocol.h")
-set(XDG_OUTPUT_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/xdg-output-protocol.c")
-add_custom_command(
-  OUTPUT "${XDG_OUTPUT_HEADER}" "${XDG_OUTPUT_SOURCE}"
-  COMMAND "${WAYLAND_SCANNER}" client-header "${XDG_OUTPUT_XML}" "${XDG_OUTPUT_HEADER}"
-  COMMAND "${WAYLAND_SCANNER}" private-code "${XDG_OUTPUT_XML}" "${XDG_OUTPUT_SOURCE}"
-  DEPENDS "${XDG_OUTPUT_XML}"
-  VERBATIM
-)
+function(generate_wayland_protocol name xml)
+  set(header "${CMAKE_CURRENT_BINARY_DIR}/${name}-client-protocol.h")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/${name}-protocol.c")
+  add_custom_command(
+    OUTPUT "${header}" "${source}"
+    COMMAND "${WAYLAND_SCANNER}" client-header "${xml}" "${header}"
+    COMMAND "${WAYLAND_SCANNER}" private-code "${xml}" "${source}"
+    DEPENDS "${xml}"
+    VERBATIM
+  )
+  set(WAYLAND_PROTOCOL_SOURCES ${WAYLAND_PROTOCOL_SOURCES} "${header}" "${source}" PARENT_SCOPE)
+endfunction()
+generate_wayland_protocol(xdg-output "${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-output/xdg-output-unstable-v1.xml")
+generate_wayland_protocol(viewporter "${WAYLAND_PROTOCOLS_DIR}/stable/viewporter/viewporter.xml")
 
 # Define the application target. To change its name, change BINARY_NAME in the
 # top-level CMakeLists.txt, not the value here, or `flutter run` will no longer
@@ -29,8 +33,8 @@ add_executable(${BINARY_NAME}
   "main.cc"
   "my_application.cc"
   "capture_windows.cc"
-  "${XDG_OUTPUT_HEADER}"
-  "${XDG_OUTPUT_SOURCE}"
+  "frozen_background.cc"
+  ${WAYLAND_PROTOCOL_SOURCES}
   "capture_plugins.cc"
 )
 

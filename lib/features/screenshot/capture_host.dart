@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -11,6 +12,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../capture_windows.dart';
 import '../../hyprland_capture_rendering.dart';
+import '../../process_command.dart';
 import '../../src/rust_bridge/api.dart' as rust;
 import '../../src/rust_bridge/frb_generated.dart';
 import '../capture_controls/capture_buttons.dart';
@@ -40,9 +42,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   final _closeRequests = ValueNotifier(0);
   final _colors = ColorPickerStore();
   ColorPickerPreferences _colorPreferences = ColorPickerPreferences();
-  late CaptureMode _startMode = widget.initialMode;
   int? _colorView;
-  int? _colorSettingsView;
   Timer? _colorToastTimer;
   Future<List<Uint8List>>? _freezing;
   static final Future<void> _backend = _initializeBackend();
@@ -98,7 +98,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   Future<Object?> _nativeEvent(MethodCall call) async {
     switch (call.method) {
       case 'outputsChanged':
-        if (_colorView != null) {
+        if (_colorToastTimer?.isActive == true) {
           await _quit();
         } else if (!_errorVisible && (_initializing || _session != null)) {
           _revision++;
@@ -107,19 +107,16 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           await _showError('The display layout changed. Start a new capture.');
         }
       case 'closeRequested':
-        if (_errorVisible) {
+        final id = (call.arguments as Map?)?['id'];
+        if (_errorVisible || (_colorView != null && id == _colorView)) {
           await _quit();
         } else {
           // Native close and the editor's Close button use the same dirty check.
           _closeRequests.value++;
         }
-      case 'focusLost':
       case 'closed':
         final id = (call.arguments as Map?)?['id'];
-        if (call.method == 'focusLost' && id == _colorSettingsView) break;
-        if (_colorView != null && id == _colorView) {
-          await _quit();
-        }
+        if (_colorView != null && id == _colorView) await _quit();
     }
     return null;
   }
@@ -143,7 +140,9 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         _errorVisible = false;
         await changeCaptureWindow('hide', editor);
       }
-      unawaited(_readColorPreferences(revision));
+      if (widget.initialMode == .color) {
+        unawaited(_readColorPreferences(revision));
+      }
       final (snapshot, connected) = await (
         _backend
             .then((_) => rust.takeStartupCapture())
@@ -208,7 +207,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         frozen,
         windows,
         active,
-        mode: _startMode,
+        mode: widget.initialMode,
         uppercaseHex: _colorPreferences.uppercase,
       );
       if (cursor != null && active.monitor.bounds.contains(cursor)) {
@@ -218,32 +217,25 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           active.monitor.bounds.size,
         );
       } else if (session.mode == .color) {
-        session.nudgeColor(Offset.zero, active.monitor.bounds.size);
+        session.nudgeColor(Offset.zero);
       }
       _session = session;
       handedOff = true;
-      final ids = await Future.wait([
-        for (final output in frozen)
-          openCaptureWindow('overlay', output: output.name),
-      ]);
-      if (!_current(revision)) {
-        await Future.wait([
-          for (final id in ids) changeCaptureWindow('close', id),
-        ]);
-        return;
-      }
-      for (final (index, output) in frozen.indexed) {
-        _overlays[output.name] = ids[index];
-      }
-      await _configureInput(session);
-      if (!_current(revision)) return;
-      for (final (index, output) in frozen.indexed) {
-        final id = ids[index];
+      for (final output in frozen) {
+        final id = await openCaptureWindow('overlay', output: output.name);
+        if (!_current(revision)) {
+          await changeCaptureWindow('close', id);
+          return;
+        }
+        _overlays[output.name] = id;
+        final native = await setFrozenBackground(id, output.png);
+        if (!_current(revision)) return;
         _setView(
           id,
           CaptureOverlay(
             session: session,
             output: output,
+            nativeBackground: native,
             onCapture: (request) => unawaited(_capture(request)),
             onPickColor: (sample, {required keepPicking}) =>
                 unawaited(_pickColor(sample, keepPicking: keepPicking)),
@@ -254,12 +246,13 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           ),
         );
       }
+      await _configureInput(session);
       if (!_current(revision)) return;
+      session.addListener(_syncKeyboard);
       await Future.wait([
         for (final id in _overlays.values.toList())
           changeCaptureWindow('show', id),
       ]);
-      session.addListener(_syncKeyboard);
     } catch (error) {
       if (!_current(revision)) return;
       await _endCapture();
@@ -386,72 +379,61 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
     bool toast = false,
   }) async {
     final revision = _revision;
-    final id = await openCaptureWindow(
-      toast ? 'result' : 'colorPanel',
-      output: output.name,
-    );
+    final height = ColorResultPanel.preferredHeight(_colorPreferences)
+        .ceil()
+        .clamp(340, math.max(340, output.bounds.height.toInt() - 16))
+        .toInt();
+    final id = toast
+        ? await openCaptureWindow('result', output: output.name)
+        : await openCaptureWindow('colorPanel', height: height);
     if (!_current(revision)) {
       await changeCaptureWindow('close', id);
       return;
     }
     _colorView = id;
-    Rect bounds(Size size, double height, Offset? origin) {
-      final width = math.min(
-        toast ? 480.0 : 640.0,
-        math.max(0.0, size.width - 16),
-      );
-      height = math.min(height, math.max(0.0, size.height - 16));
-      return Rect.fromLTWH(
-        origin?.dx.clamp(0.0, size.width - width) ?? (size.width - width) / 2,
-        origin?.dy.clamp(0.0, size.height - height) ??
-            (toast
-                ? math.max(8.0, size.height - height - 56)
-                : (size.height - height) / 2),
-        width,
-        height,
-      );
-    }
-
-    final initialHeight = toast
-        ? 64.0
-        : ColorResultPanel.preferredHeight(_colorPreferences);
-    final layout = ValueNotifier<({double height, Offset? origin})>((
-      height: initialHeight,
-      origin: null,
-    ));
-    Rect panelBounds(Size size) =>
-        bounds(size, layout.value.height, layout.value.origin);
-    Future<void> setColorInput() => setCaptureInput(
-      id,
-      [panelBounds(output.bounds.size)],
-      toast
-          ? 'none'
-          : _colorSettingsView == id
-          ? 'onDemand'
-          : 'exclusive',
-    );
-    void updateColorInput() {
-      if (_colorView != id || _closing) return;
-      unawaited(
-        setColorInput().catchError((Object error) {
-          if (_colorView == id && !_closing) debugPrint(_message(error));
-        }),
-      );
-    }
-
-    final child = toast
-        ? ColorCopyToast(
-            picked: picked,
-            preferences: _colorPreferences,
-            onDetails: () => unawaited(
-              _continueColorResult(
-                id,
-                () => _showColorResult(output, picked, history, copied: copied),
-              ),
+    try {
+      if (toast) {
+        final size = output.bounds.size;
+        final width = math.min(480.0, size.width - 16);
+        final bounds = Rect.fromLTWH(
+          (size.width - width) / 2,
+          math.max(8, size.height - 120),
+          width,
+          64,
+        );
+        _setView(
+          id,
+          LayoutBuilder(
+            builder: (context, constraints) => Stack(
+              children: [
+                Positioned.fromRect(
+                  rect: scaleRect(bounds, size, constraints.biggest),
+                  child: ColorCopyToast(
+                    picked: picked,
+                    preferences: _colorPreferences,
+                    onDetails: () => unawaited(
+                      _continueColorResult(
+                        id,
+                        () => _showColorResult(
+                          output,
+                          picked,
+                          history,
+                          copied: copied,
+                        ),
+                      ),
+                    ),
+                    onClose: () => unawaited(_quit()),
+                  ),
+                ),
+              ],
             ),
-            onClose: () => unawaited(_quit()),
-          )
-        : ColorResultPanel(
+          ),
+        );
+        await setCaptureInput(id, [bounds], 'none');
+      } else {
+        _setView(
+          id,
+          ColorResultPanel(
             picked: picked,
             history: history,
             preferences: _colorPreferences,
@@ -462,74 +444,23 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
                 _colors.add(entry, _colorPreferences.historySize),
             onDelete: (entry) =>
                 _colors.remove(entry, _colorPreferences.historySize),
-            onOpenSettings: () async {
-              final previous = _colorSettingsView;
-              // Settings needs keyboard focus while the layer-shell panel stays open.
-              _colorSettingsView = id;
-              try {
-                await setColorInput();
-                await openCaptureSettings(page: 'color-picker');
-              } catch (_) {
-                _colorSettingsView = previous;
-                if (_colorView == id && !_closing) await setColorInput();
-                rethrow;
-              }
-            },
-            onPickAgain: () => unawaited(
-              _continueColorResult(id, () async {
-                _startMode = .color;
-                await _start();
-              }),
-            ),
+            onOpenSettings: () => openCaptureSettings(page: 'color-picker'),
+            onPickAgain: () => unawaited(_continueColorResult(id, _start)),
             onClose: () => unawaited(_quit()),
-            onHeightChanged: (value) {
-              if (_colorView != id ||
-                  _closing ||
-                  value == layout.value.height) {
-                return;
-              }
-              layout.value = (height: value, origin: layout.value.origin);
-              updateColorInput();
-            },
-            onDrag: (delta) {
-              if (_colorView != id || _closing) return;
-              // shortcut: the layer surface is output-bound; cross-output drag needs a surface handoff.
-              final size = output.bounds.size;
-              final height = layout.value.height;
-              final target = panelBounds(size).topLeft + delta;
-              layout.value = (
-                height: height,
-                origin: bounds(size, height, target).topLeft,
-              );
-            },
-            // The implicit pointer grab keeps the drag on this surface until release.
-            onDragEnd: updateColorInput,
-          );
-    _setView(
-      id,
-      LayoutBuilder(
-        builder: (context, constraints) => ValueListenableBuilder(
-          valueListenable: layout,
-          child: child,
-          builder: (context, value, child) => Stack(
-            children: [
-              Positioned.fromRect(
-                rect: bounds(constraints.biggest, value.height, value.origin),
-                child: child!,
-              ),
-            ],
+            onMoveWindow: () => unawaited(changeCaptureWindow('beginMove', id)),
           ),
-        ),
-      ),
-    );
-    try {
-      await setColorInput();
+        );
+      }
       await changeCaptureWindow('show', id);
-      if (toast && _colorView == id && _current(revision)) {
+      if (!_current(revision) || _colorView != id) return;
+      if (toast) {
         _colorToastTimer = Timer(
           const Duration(seconds: 4),
           () => unawaited(_quit()),
         );
+      } else {
+        await _releaseCaptureLock();
+        unawaited(_floatColorWindow(id, output.name, height));
       }
     } catch (_) {
       if (_colorView == id) {
@@ -537,6 +468,50 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         await _removeView(id);
       }
       rethrow;
+    }
+  }
+
+  Future<void> _floatColorWindow(int id, String output, int height) async {
+    // The first rendered frame maps the toplevel after the show request.
+    final revision = _revision;
+    final script =
+        """
+for _, w in ipairs(hl.get_windows()) do
+  if w.pid == $pid and w.initial_title == "Remy'a Color Picker" and w.monitor then
+    hl.dispatch(hl.dsp.window.float({ window = w, action = "set" }))
+    if w.monitor.name ~= ${jsonEncode(output)} then
+      hl.dispatch(hl.dsp.window.move({ window = w, monitor = ${jsonEncode(output)} }))
+    end
+    hl.dispatch(hl.dsp.window.resize({ window = w, x = 640, y = $height }))
+    hl.dispatch(hl.dsp.window.center({ window = w }))
+    return "mapped"
+  end
+end
+return "pending"
+""";
+    try {
+      for (
+        var attempt = 0;
+        _colorView == id && _current(revision) && attempt < 20;
+        attempt++
+      ) {
+        final result = await runCommand('hyprctl', [
+          'repl',
+          script,
+        ], timeout: const Duration(milliseconds: 500));
+        if (result.exitCode == 0 &&
+            result.stdout.toString().trim() == 'mapped') {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      if (_colorView == id && _current(revision)) {
+        debugPrint('Could not set the color picker window to float.');
+      }
+    } catch (error) {
+      debugPrint(
+        'Setting the color picker window to float: ${_message(error)}',
+      );
     }
   }
 
@@ -782,17 +757,21 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
 
   Future<void> _back() async {
     final session = _session;
-    if (session == null || session.busy) return;
+    if (session == null || _scrollRun?.finishing == true) return;
     if (session.scroll != null) {
       _stopScroll();
       session.setScroll(null);
+      session.setBusy(false);
       await _configureInput(session);
+    } else if (session.busy) {
+      return;
     } else if (session.mode == .color) {
       await _quit();
     } else if (session.selection != null) {
       session.clearSelection();
-    } else if (session.draft != null) {
+    } else if (session.dragging) {
       session.cancelDrag();
+      session.endToolbarDrag();
     } else {
       await _quit();
     }
@@ -831,7 +810,11 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       );
     final update = _inputQueue.then((_) async {
       for (final entry in ordered) {
-        if (_session != session) return;
+        if (_session != session ||
+            session.scroll?.panel != panel ||
+            _keyboardView != overlays[target]) {
+          return;
+        }
         final rects = panel == null
             ? null
             : panel.output == entry.key
@@ -842,6 +825,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
             entry.value,
             rects,
             entry.key == target ? 'exclusive' : 'none',
+            frozen: panel == null,
           );
         } on PlatformException {
           if (_session == session && !_closing) rethrow;
