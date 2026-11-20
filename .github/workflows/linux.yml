@@ -73,6 +73,7 @@ jobs:
           chown -R remya-ci:remya-ci ..
           runuser --user remya-ci -- bash -euo pipefail -s -- "$PWD" <<'BUILD'
           cd "$1"
+          python tool/check_source_length.py
           flutter_version=$(python -c 'import json; print(json.load(open(".fvmrc"))["flutter"])')
           fvm install "$flutter_version" --skip-pub-get
           git diff --check HEAD^ HEAD
