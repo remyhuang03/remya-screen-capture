@@ -8,11 +8,15 @@ import 'app.dart';
 const captureWindows = MethodChannel('top.remya.screen_capture/windows');
 const captureSessions = MethodChannel('top.remya.screen_capture/sessions');
 
-Future<int> openCaptureWindow(String role, {String? output}) async =>
-    (await captureWindows.invokeMethod<int>('open', {
-      'role': role,
-      'output': ?output,
-    }))!;
+Future<int> openCaptureWindow(
+  String role, {
+  String? output,
+  int? height,
+}) async => (await captureWindows.invokeMethod<int>('open', {
+  'role': role,
+  'output': ?output,
+  'height': ?height,
+}))!;
 
 Future<void> changeCaptureWindow(String action, int id) async {
   try {
@@ -22,21 +26,32 @@ Future<void> changeCaptureWindow(String action, int id) async {
   }
 }
 
-Future<void> setCaptureInput(int id, List<Rect>? rects, String keyboard) =>
-    captureWindows.invokeMethod<void>('input', {
+Future<bool> setFrozenBackground(int id, Uint8List png) async =>
+    (await captureWindows.invokeMethod<bool>('setFrozenBackground', {
       'id': id,
-      'keyboard': keyboard,
-      'rects': rects
-          ?.map(
-            (rect) => {
-              'x': rect.left.floor(),
-              'y': rect.top.floor(),
-              'width': rect.right.ceil() - rect.left.floor(),
-              'height': rect.bottom.ceil() - rect.top.floor(),
-            },
-          )
-          .toList(),
-    });
+      'png': png,
+    }))!;
+
+Future<void> setCaptureInput(
+  int id,
+  List<Rect>? rects,
+  String keyboard, {
+  bool? frozen,
+}) => captureWindows.invokeMethod<void>('input', {
+  'id': id,
+  'keyboard': keyboard,
+  'frozen': ?frozen,
+  'rects': rects
+      ?.map(
+        (rect) => {
+          'x': rect.left.floor(),
+          'y': rect.top.floor(),
+          'width': rect.right.ceil() - rect.left.floor(),
+          'height': rect.bottom.ceil() - rect.top.floor(),
+        },
+      )
+      .toList(),
+});
 
 String captureRuntimeDirectory() {
   final runtime = Platform.environment['XDG_RUNTIME_DIR'];

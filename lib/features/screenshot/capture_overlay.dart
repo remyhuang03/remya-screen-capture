@@ -18,6 +18,7 @@ class CaptureOverlay extends StatefulWidget {
     super.key,
     required this.session,
     required this.output,
+    this.nativeBackground = false,
     required this.onCapture,
     required this.onPickColor,
     required this.onColorHistory,
@@ -28,6 +29,7 @@ class CaptureOverlay extends StatefulWidget {
 
   final CaptureSession session;
   final FrozenOutput output;
+  final bool nativeBackground;
   final ValueChanged<CaptureRequest> onCapture;
   final void Function(PickedColor sample, {required bool keepPicking})
   onPickColor;
@@ -43,42 +45,53 @@ class CaptureOverlay extends StatefulWidget {
 class _CaptureOverlayState extends State<CaptureOverlay> {
   final _focus = FocusNode(debugLabel: 'Screenshot overlay');
   int? _pointerId;
-  final _toolbarPosition = ValueNotifier<Offset?>(null);
-  late final _toolbarLayout = _ModeToolbarLayout(_toolbarPosition);
+  late bool _active;
 
   CaptureSession get session => widget.session;
   FrozenOutput get output => widget.output;
 
   @override
+  void initState() {
+    super.initState();
+    _active = output == session.active;
+    session.addListener(_focusActiveOutput);
+  }
+
+  void _focusActiveOutput() {
+    final active = session.active == output;
+    if (active && !_active && session.scroll == null) _focus.requestFocus();
+    _active = active;
+  }
+
+  @override
   void dispose() {
-    _toolbarPosition.dispose();
+    session.removeListener(_focusActiveOutput);
     _focus.dispose();
     super.dispose();
   }
 
-  KeyEventResult _key(KeyEvent event, Size viewport) {
-    if (event is KeyUpEvent || session.busy) return .ignored;
+  KeyEventResult _key(KeyEvent event) {
+    if (event is KeyUpEvent ||
+        (session.scroll == null &&
+            (session.busy || session.active != output))) {
+      return .ignored;
+    }
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
       widget.onBack();
       return .handled;
     }
+    if (session.busy || session.dragging) return .ignored;
     final keyboard = HardwareKeyboard.instance;
-    if (const SingleActivator(
-      .keyC,
-      includeRepeats: false,
-    ).accepts(event, keyboard)) {
-      _focus.requestFocus();
-      session.toggleColor(viewport);
-      return .handled;
-    }
     if (const SingleActivator(
           .tab,
           includeRepeats: false,
         ).accepts(event, keyboard) &&
         _focus.hasPrimaryFocus &&
-        session.scroll == null) {
-      session.cycleMode(viewport);
+        session.scroll == null &&
+        session.selection == null &&
+        session.mode != .color) {
+      session.cycleMode();
       return .handled;
     }
     final move = switch (key) {
@@ -93,7 +106,7 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
           !keyboard.isControlPressed &&
           !keyboard.isAltPressed &&
           !keyboard.isMetaPressed) {
-        session.nudgeColor(move * (keyboard.isShiftPressed ? 10 : 1), viewport);
+        session.nudgeColor(move * (keyboard.isShiftPressed ? 10 : 1));
         return .handled;
       }
       for (final (shortcut, action) in [
@@ -148,7 +161,10 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: session,
-    builder: (context, _) => LayoutBuilder(
+    child: widget.nativeBackground
+        ? null
+        : RawImage(image: output.image, fit: .fill, filterQuality: .none),
+    builder: (context, background) => LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
         if (size.isEmpty) return const SizedBox.shrink();
@@ -175,12 +191,22 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                 output.monitor.bounds.size,
                 size,
               );
+        final logicalSize = output.monitor.bounds.size;
+        Offset viewPoint(Offset point) => Offset(
+          point.dx * size.width / logicalSize.width,
+          point.dy * size.height / logicalSize.height,
+        );
+        final view = context.findRenderObject() as RenderBox;
+        final draft = active ? session.draft : null;
         final hole =
             selection ??
-            (active ? session.draft : null) ??
+            (draft == null ? null : scaleRect(draft, logicalSize, size)) ??
             (session.mode == .window ? windowRect : null);
-        final pointer = active && hole == null && session.mode == .region
-            ? session.pointer
+        final pointer = active && session.pointer != null
+            ? viewPoint(session.pointer!)
+            : null;
+        final regionPointer = hole == null && session.mode == .region
+            ? pointer
             : null;
         final colors = Theme.of(context).colorScheme;
         final panel = scroll?.panel;
@@ -191,13 +217,12 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
 
         return Focus(
           focusNode: _focus,
-          autofocus: true,
-          onKeyEvent: (_, event) => _key(event, size),
+          autofocus: active,
+          onKeyEvent: (_, event) => _key(event),
           child: Stack(
             fit: .expand,
             children: [
-              if (scroll == null)
-                RawImage(image: output.image, fit: .fill, filterQuality: .none),
+              if (scroll == null && background != null) background,
               IgnorePointer(
                 child: AnimatedOpacity(
                   opacity: picking ? 0 : 1,
@@ -205,7 +230,7 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                   child: CustomPaint(
                     painter: _OverlayPaint(
                       hole: hole,
-                      pointer: pointer,
+                      pointer: regionPointer,
                       outline: colors.primary,
                       window: windowRect != null,
                       scrolling: scroll != null,
@@ -221,6 +246,8 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                         : session.mode == .region && selection == null
                         ? SystemMouseCursors.precise
                         : SystemMouseCursors.basic,
+                    onEnter: (event) =>
+                        session.hover(output, event.localPosition, size),
                     onHover: (event) =>
                         session.hover(output, event.localPosition, size),
                     child: Listener(
@@ -291,10 +318,10 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                     ),
                   ),
                 ),
-              if (pointer != null && !session.busy)
-                _Loupe(output: output, pointer: pointer, viewport: size),
+              if (regionPointer != null && !session.busy)
+                _Loupe(output: output, pointer: regionPointer, viewport: size),
               if (picking && active)
-                if ((session.colorPixel, session.pointer) case (
+                if ((session.colorPixel, pointer) case (
                   final pixel?,
                   final pointer?,
                 ))
@@ -322,28 +349,40 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                     windowOutput.size,
                   ).size,
                 ),
-              if (active &&
+              if ((active || session.toolbarDragSource == output) &&
                   selection == null &&
-                  session.draft == null &&
+                  draft == null &&
                   scroll == null)
                 Positioned.fill(
-                  child: RepaintBoundary(
-                    child: CustomSingleChildLayout(
-                      delegate: _toolbarLayout,
-                      child: RepaintBoundary(
+                  child: Visibility.maintain(
+                    visible: active,
+                    child: IgnorePointer(
+                      ignoring: !active,
+                      child: CustomSingleChildLayout(
+                        delegate: _ModeToolbarLayout(switch (session
+                            .toolbarPosition(output)) {
+                          final position? => viewPoint(position),
+                          null => null,
+                        }),
                         child: _ModeToolbar(
                           mode: session.mode,
                           onChanged: (value) {
                             _focus.requestFocus();
-                            session.changeMode(value, size);
+                            session.changeMode(value);
                           },
-                          onDrag: (delta, toolbar) {
-                            _toolbarPosition.value = _toolbarLayout.positionFor(
-                              size,
-                              toolbar,
-                              delta: delta,
-                            );
-                          },
+                          onHistory: widget.onColorHistory,
+                          onDragStart: (position, origin) =>
+                              session.startToolbarDrag(
+                                output,
+                                view.globalToLocal(position),
+                                view.globalToLocal(origin),
+                                size,
+                              ),
+                          onDrag: (position) => session.updateToolbarDrag(
+                            view.globalToLocal(position),
+                            size,
+                          ),
+                          onDragEnd: session.endToolbarDrag,
                         ),
                       ),
                     ),
@@ -405,25 +444,22 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
 }
 
 class _ModeToolbarLayout extends SingleChildLayoutDelegate {
-  _ModeToolbarLayout(this.position) : super(relayout: position);
+  const _ModeToolbarLayout(this.position);
 
-  final ValueNotifier<Offset?> position;
+  final Offset? position;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
       BoxConstraints.loose(constraints.deflate(const .all(8)).biggest);
 
   @override
-  Offset getPositionForChild(Size size, Size childSize) =>
-      positionFor(size, childSize);
-
-  Offset positionFor(Size size, Size childSize, {Offset delta = Offset.zero}) {
+  Offset getPositionForChild(Size size, Size childSize) {
     final horizontal = size.width - childSize.width;
     final vertical = size.height - childSize.height;
-    final target = position.value ?? Offset(horizontal / 2, 24);
+    final target = position ?? Offset(horizontal / 2, 24);
     return Offset(
-      (target.dx.clamp(0.0, horizontal) + delta.dx).clamp(0.0, horizontal),
-      (target.dy.clamp(0.0, vertical) + delta.dy).clamp(0.0, vertical),
+      target.dx.clamp(0.0, horizontal),
+      target.dy.clamp(0.0, vertical),
     );
   }
 
@@ -436,12 +472,18 @@ class _ModeToolbar extends StatelessWidget {
   const _ModeToolbar({
     required this.mode,
     required this.onChanged,
+    required this.onHistory,
+    required this.onDragStart,
     required this.onDrag,
+    required this.onDragEnd,
   });
 
   final CaptureMode mode;
   final ValueChanged<CaptureMode> onChanged;
-  final void Function(Offset delta, Size toolbar) onDrag;
+  final VoidCallback onHistory;
+  final void Function(Offset position, Offset origin) onDragStart;
+  final ValueChanged<Offset> onDrag;
+  final VoidCallback onDragEnd;
 
   @override
   Widget build(BuildContext context) => MouseRegion(
@@ -449,47 +491,56 @@ class _ModeToolbar extends StatelessWidget {
     child: GestureDetector(
       behavior: .opaque,
       dragStartBehavior: .down,
-      onPanUpdate: (details) => onDrag(details.delta, context.size!),
+      onPanStart: (event) => onDragStart(
+        event.globalPosition,
+        event.globalPosition - event.localPosition,
+      ),
+      onPanUpdate: (event) => onDrag(event.globalPosition),
+      onPanEnd: (_) => onDragEnd(),
+      onPanCancel: onDragEnd,
       child: CaptureSurface(
+        padding: mode == .color
+            ? const .symmetric(horizontal: 18, vertical: 9)
+            : const .all(9),
         child: Wrap(
           alignment: .center,
           crossAxisAlignment: .center,
           spacing: 8,
           runSpacing: 8,
           children: [
-            CaptureSegmentedControl(
-              segments: const [
-                CaptureSegment(
-                  CaptureMode.region,
-                  'Region',
-                  icon: CaptureIcon.segmentRegion(),
-                ),
-                CaptureSegment(
-                  CaptureMode.window,
-                  'Window',
-                  icon: CaptureIcon.segmentWindow(),
-                ),
-                CaptureSegment(
-                  CaptureMode.color,
-                  'Color',
-                  icon: CaptureIcon.segmentColor(),
-                ),
-              ],
-              value: mode,
-              onChanged: onChanged,
-            ),
-            const CaptureDivider(),
-            if (mode == .color) ...const [
-              _Hint('LMB', 'Pick'),
-              _Hint('Shift+LMB', 'Pick & keep'),
-              _Hint('Scroll', 'Zoom'),
-              _Hint('F', 'Format'),
+            if (mode == .color) ...[
+              CaptureButton(
+                label: 'History',
+                icon: const CaptureIcon(.history),
+                onPressed: onHistory,
+              ),
+              const CaptureDivider(),
+              const _Hint('LMB', 'Pick'),
+              const _Hint('Shift+LMB', 'Pick & keep'),
+              const _Hint('Scroll', 'Zoom'),
+              const _Hint('F', 'Format'),
             ] else ...[
+              CaptureSegmentedControl(
+                segments: const [
+                  CaptureSegment(
+                    CaptureMode.region,
+                    'Region',
+                    icon: CaptureIcon.segmentRegion(),
+                  ),
+                  CaptureSegment(
+                    CaptureMode.window,
+                    'Window',
+                    icon: CaptureIcon.segmentWindow(),
+                  ),
+                ],
+                value: mode,
+                onChanged: onChanged,
+              ),
+              const CaptureDivider(),
               _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
               _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
+              const _Hint('Tab', 'Switch'),
             ],
-            _Hint('C', mode == .color ? 'Back to capture' : 'Pick color'),
-            const _Hint('Tab', 'Switch'),
             const _Hint('Esc', 'Cancel'),
           ],
         ),
@@ -633,7 +684,6 @@ class _SelectionTools extends StatelessWidget {
                       _Hint('Esc', 'Cancel'),
                       _Hint('Shift', 'Keep ratio'),
                       _Hint('←↑→↓', 'Nudge'),
-                      _Hint('C', 'Pick color'),
                     ],
                   ),
                 ),

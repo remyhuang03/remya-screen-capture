@@ -31,9 +31,7 @@ class ColorResultPanel extends StatefulWidget {
     required this.onOpenSettings,
     required this.onPickAgain,
     required this.onClose,
-    required this.onHeightChanged,
-    required this.onDrag,
-    required this.onDragEnd,
+    required this.onMoveWindow,
   });
 
   static double preferredHeight(ColorPickerPreferences preferences) =>
@@ -52,9 +50,7 @@ class ColorResultPanel extends StatefulWidget {
   final Future<void> Function() onOpenSettings;
   final VoidCallback onPickAgain;
   final VoidCallback onClose;
-  final ValueChanged<double> onHeightChanged;
-  final ValueChanged<Offset> onDrag;
-  final VoidCallback onDragEnd;
+  final VoidCallback onMoveWindow;
 
   @override
   State<ColorResultPanel> createState() => _ColorResultPanelState();
@@ -150,9 +146,6 @@ class _ColorResultPanelState extends State<ColorResultPanel> {
 
   void _toggleAdjust(bool adjust) {
     setState(() => _draft = adjust ? HSLColor.fromColor(_picked.color) : null);
-    widget.onHeightChanged(
-      adjust ? 587 : ColorResultPanel.preferredHeight(_preferences),
-    );
     if (!adjust) _focus.requestFocus();
   }
 
@@ -241,13 +234,6 @@ class _ColorResultPanelState extends State<ColorResultPanel> {
       onKeyEvent: _key,
       child: Material(
         color: colors.surfaceContainer,
-        elevation: 14,
-        shadowColor: Colors.black87,
-        shape: RoundedRectangleBorder(
-          borderRadius: .circular(32),
-          side: BorderSide(color: colors.outlineVariant.withValues(alpha: .5)),
-        ),
-        clipBehavior: .antiAlias,
         child: SingleChildScrollView(
           padding: const .all(17),
           child: Column(
@@ -264,8 +250,7 @@ class _ColorResultPanelState extends State<ColorResultPanel> {
                 onSettings: _busy || draft != null
                     ? null
                     : () => _run(widget.onOpenSettings),
-                onDrag: widget.onDrag,
-                onDragEnd: widget.onDragEnd,
+                onMoveWindow: widget.onMoveWindow,
               ),
               SizedBox(
                 height: draft == null
@@ -435,8 +420,7 @@ class _Header extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onClose,
-    required this.onDrag,
-    required this.onDragEnd,
+    required this.onMoveWindow,
     this.onSettings,
   });
 
@@ -444,8 +428,7 @@ class _Header extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onClose;
   final VoidCallback? onSettings;
-  final ValueChanged<Offset> onDrag;
-  final VoidCallback onDragEnd;
+  final VoidCallback onMoveWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -473,9 +456,7 @@ class _Header extends StatelessWidget {
             child: GestureDetector(
               behavior: .opaque,
               dragStartBehavior: .down,
-              onPanUpdate: (event) => onDrag(event.delta),
-              onPanEnd: (_) => onDragEnd(),
-              onPanCancel: onDragEnd,
+              onPanStart: (_) => onMoveWindow(),
               child: Column(
                 crossAxisAlignment: .start,
                 children: [

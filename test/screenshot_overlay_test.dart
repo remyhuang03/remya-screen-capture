@@ -157,18 +157,14 @@ void main() {
       final session = CaptureSession([output], [window('a')], output);
       addTearDown(session.dispose);
       final requests = <CaptureRequest>[];
-      final picks = <(PickedColor, bool)>[];
-      output.pixels
-        ..setUint32((300 * 1440 + 361) * 4, 0x123456ff)
-        ..setUint32((300 * 1440 + 371) * 4, 0x4f378bff);
       await tester.pumpWidget(
         MaterialApp(
           home: CaptureOverlay(
             session: session,
             output: output,
             onCapture: requests.add,
-            onPickColor: (sample, {required keepPicking}) =>
-                picks.add((sample, keepPicking)),
+            onPickColor: (_, {required keepPicking}) =>
+                fail('Screenshot mode should never pick a color'),
             onColorHistory: () {},
             onScroll: () {},
             onBack: session.clearSelection,
@@ -176,21 +172,14 @@ void main() {
           ),
         ),
       );
-      expect(find.widgetWithText(CaptureKeycap, 'C'), findsOneWidget);
-      expect(find.text('Pick color'), findsOneWidget);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
-      expect(session.mode, CaptureMode.color);
-      await tester.pumpAndSettle();
-      expect(find.widgetWithText(CaptureKeycap, 'C'), findsOneWidget);
-      expect(find.text('Back to capture'), findsOneWidget);
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      expect(session.mode, CaptureMode.color);
+      expect(find.text('Pick color'), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       expect(session.mode, CaptureMode.region);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      expect(session.mode, CaptureMode.window);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      expect(session.mode, CaptureMode.region);
       await tester.pump();
-
       final toolbarHint = find.text('Switch');
       final before = tester.getCenter(toolbarHint);
       final frozenImage = tester.widget<RawImage>(find.byType(RawImage));
@@ -230,8 +219,6 @@ void main() {
       await selection.up();
       await tester.pump();
       expect(find.text('Edit'), findsOneWidget);
-      expect(find.widgetWithText(CaptureKeycap, 'C'), findsOneWidget);
-      expect(find.text('Pick color'), findsOneWidget);
       expect(session.selection, const Rect.fromLTRB(360, 300, 660, 540));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -254,40 +241,195 @@ void main() {
         tester.getRect(hintSurface).bottom,
         lessThan(tester.getRect(badge).top),
       );
-      final region = session.selection;
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
-      await tester.pumpAndSettle();
-      await tester.sendEventToBinding(
-        const PointerHoverEvent(
-          device: 50,
-          kind: PointerDeviceKind.mouse,
-          position: Offset(240, 200),
-        ),
-      );
+      session.setScroll((
+        panel: (output: output.name, rect: const Rect.fromLTWH(8, 8, 300, 500)),
+        frames: 0,
+        width: 0,
+        height: 0,
+        png: null,
+        message: 'Starting…',
+        ready: false,
+      ));
+      session.setBusy(true);
       await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      expect(picks.single.$1.color, const Color(0xff123456));
-      expect(picks.single.$1.position, const Offset(241, 200));
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-      await tester.tapAt(const Offset(247.5, 200));
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-      expect(picks.last.$1.color, const Color(0xff4f378b));
-      expect(picks.last.$2, isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('#4F378B'), findsOneWidget);
-      session.setUppercaseHex(false);
-      await tester.pumpAndSettle();
-      expect(find.text('#4f378b'), findsOneWidget);
-      expect(find.text('#4F378B'), findsNothing);
-      expect(requests, hasLength(2));
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
-      expect(session.colorFormat, ColorFormat.rgb);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
-      expect(session.mode, CaptureMode.region);
-      expect(session.selection, region);
-      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      expect(session.selection, isNull);
       expect(tester.takeException(), isNull);
     },
+  );
+
+  for (final mode in [CaptureMode.region, CaptureMode.color]) {
+    testWidgets('${mode.name} toolbar crosses outputs while held', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final left = _frozen(tester, monitor(x: -600, width: 900, height: 900));
+      final right = _frozen(
+        tester,
+        monitor(id: 2, name: 'eDP-1', width: 1200, height: 1200, scale: 2),
+      );
+      final session = CaptureSession([left, right], [], left, mode: mode);
+      addTearDown(session.dispose);
+      final picks = <(PickedColor, bool)>[];
+      var historyOpens = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Row(
+            children: [
+              for (final output in [left, right])
+                Expanded(
+                  child: CaptureOverlay(
+                    session: session,
+                    output: output,
+                    nativeBackground: true,
+                    onCapture: (_) => fail('Dragging the toolbar captured'),
+                    onPickColor: (color, {required keepPicking}) =>
+                        picks.add((color, keepPicking)),
+                    onColorHistory: () => historyOpens++,
+                    onScroll: () {},
+                    onBack: session.clearSelection,
+                    onDone: () {},
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+      expect(find.byType(RawImage), findsNothing);
+      final hint = find.widgetWithText(CaptureKeycap, 'Esc');
+      final origin = tester.getCenter(hint);
+      final mouse = await tester.startGesture(origin, kind: .mouse);
+      await mouse.moveTo(Offset(1000, 150));
+      await tester.pump();
+      expect(session.toolbarDragSource, left);
+      expect(session.active, right);
+      expect(tester.getCenter(hint.last).dx, greaterThan(600));
+      await mouse.moveTo(Offset(1030, 180));
+      await mouse.up();
+      await tester.pump();
+      expect(session.toolbarDragSource, isNull);
+      expect(hint, findsOneWidget);
+      expect(tester.getCenter(hint).dx, greaterThan(600));
+
+      if (mode == .color) {
+        expect(find.text('Region'), findsNothing);
+        final surface = find.byType(CaptureSurface);
+        final background = tester.getRect(surface);
+        final toolbar = find.descendant(
+          of: surface,
+          matching: find.byType(Wrap),
+        );
+        final content = tester.getRect(toolbar);
+        expect(
+          tester.widget<Wrap>(toolbar).children.first,
+          isA<CaptureButton>()
+              .having((button) => button.label, 'label', 'History')
+              .having(
+                (button) => button.variant,
+                'variant',
+                CaptureButtonStyle.filled,
+              ),
+        );
+        expect(content.left - background.left, 18);
+        expect(background.right - content.right, 18);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+        expect(session.mode, CaptureMode.color);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+        expect(historyOpens, 1);
+        right.pixels
+          ..setUint32((800 * 1200 + 201) * 4, 0x123456ff)
+          ..setUint32((800 * 1200 + 204) * 4, 0x4f378bff);
+        await tester.sendEventToBinding(
+          const PointerHoverEvent(
+            device: 50,
+            kind: .mouse,
+            position: Offset(700, 400),
+          ),
+        );
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        expect(picks.single.$1.color, const Color(0xff123456));
+        expect(picks.single.$1.output, right.name);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.tapAt(const Offset(702, 400));
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        expect(picks.last.$1.color, const Color(0xff4f378b));
+        expect(picks.last.$2, isTrue);
+        await tester.pumpAndSettle();
+        session.setUppercaseHex(false);
+        await tester.pumpAndSettle();
+        expect(find.text('#4f378b'), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+        expect(session.colorFormat, ColorFormat.rgb);
+        await tester.tap(find.widgetWithText(CaptureButton, 'History'));
+        expect(historyOpens, 2);
+      } else {
+        expect(find.text('History'), findsNothing);
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        expect(session.mode, CaptureMode.window);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('a dragged selection is rebuilt from the destination edge', (
+    tester,
+  ) async {
+    final left = _frozen(tester, monitor(x: -960));
+    final right = _frozen(
+      tester,
+      monitor(
+        id: 2,
+        name: 'eDP-1',
+        x: 24,
+        y: 60,
+        width: 1600,
+        height: 1200,
+        scale: 2,
+      ),
+    );
+    final session = CaptureSession([left, right], [], left);
+    addTearDown(session.dispose);
+    final viewport = left.monitor.bounds.size;
+    session.startDrag(left, const Offset(900, 100), viewport, true);
+    session.updateDrag(left, const Offset(945, 140), viewport);
+    expect(session.draft, const Rect.fromLTRB(900, 100, 945, 140));
+    session.updateDrag(left, const Offset(1036, 231), viewport);
+    expect(session.active, right);
+    expect(session.draft, const Rect.fromLTRB(0, 119, 52, 171));
+    expect(session.endDrag(left, const Offset(1036, 231), viewport), isNull);
+    expect(session.request.output, right);
+    expect(session.selection, const Rect.fromLTRB(0, 238, 104, 342));
+    expect(session.request.edit, isTrue);
+    session.clearSelection();
+
+    session.startDrag(left, const Offset(950, 140), viewport, false);
+    expect(session.endDrag(left, const Offset(985, 140), viewport), isNull);
+    expect(session.active, right);
+    expect(session.selection, isNull);
+    session.startDrag(left, const Offset(950, 140), viewport, false);
+    expect(session.endDrag(left, const Offset(970, 140), viewport), isNull);
+    expect(session.selection, isNull);
+  });
+}
+
+FrozenOutput _frozen(WidgetTester tester, CaptureMonitor output) {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawColor(const Color(0xff536789), .src);
+  final picture = recorder.endRecording();
+  final width = output.pixelSize.width.toInt();
+  final height = output.pixelSize.height.toInt();
+  final image = picture.toImageSync(width, height);
+  picture.dispose();
+  addTearDown(image.dispose);
+  return FrozenOutput(
+    output,
+    Uint8List(0),
+    image,
+    ByteData(width * height * 4),
   );
 }

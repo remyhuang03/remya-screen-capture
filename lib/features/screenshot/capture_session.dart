@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -71,7 +72,7 @@ class CaptureSession extends ChangeNotifier {
     this.outputs,
     this.windows,
     this.active, {
-    this.mode = .region,
+    this._mode = .region,
     this.uppercaseHex = true,
   });
 
@@ -79,14 +80,12 @@ class CaptureSession extends ChangeNotifier {
   final List<CaptureWindow> windows;
   bool uppercaseHex;
   FrozenOutput active;
-  CaptureMode mode;
-  CaptureMode _previousMode = .region;
+  CaptureMode _mode;
+  CaptureMode get mode => _mode;
   Rect? _selection;
-  FrozenOutput? _selectionOutput;
-  ({FrozenOutput output, Offset position, Size viewport})? _hover;
+  ({FrozenOutput output, Offset position})? _hover;
   Offset? pointer;
   Offset? colorPixel;
-  Size? _colorViewport;
   ColorFormat colorFormat = .hex;
   int zoom = 12;
   CaptureWindow? hoveredWindow;
@@ -95,10 +94,19 @@ class CaptureSession extends ChangeNotifier {
   String? message;
   ScrollPreview? scroll;
 
-  Offset? _origin;
+  Offset? _dragStart;
+  Offset? _lastDragPoint;
+  Offset? _regionAnchor;
+  bool _crossedOutput = false;
   Rect? draft;
 
-  Rect? get selection => mode == .region ? _selection : null;
+  final _toolbarPositions = <FrozenOutput, Offset>{};
+  FrozenOutput? toolbarDragSource;
+  Offset? _toolbarGrab;
+
+  Rect? get selection => _selection;
+  bool get dragging => _dragStart != null || toolbarDragSource != null;
+  Offset? toolbarPosition(FrozenOutput output) => _toolbarPositions[output];
 
   void setUppercaseHex(bool value) {
     if (uppercaseHex == value) return;
@@ -107,66 +115,82 @@ class CaptureSession extends ChangeNotifier {
   }
 
   void hover(FrozenOutput output, Offset position, Size viewport) {
-    if (_origin != null || scroll != null) return;
-    _hover = (output: output, position: position, viewport: viewport);
-    if (busy || selection != null) return;
-    active = output;
-    pointer = position;
-    if (mode == .color) {
-      _colorViewport = viewport;
-      colorPixel = output.pixelAt(position, viewport);
+    final local = _outputPoint(output, position, viewport);
+    _hover = (output: output, position: local);
+    if (busy ||
+        scroll != null ||
+        selection != null ||
+        _dragStart != null ||
+        toolbarDragSource != null) {
+      return;
     }
-    if (mode == .window) {
-      final monitor = output.monitor;
-      hoveredWindow = windowAt(
-        monitor,
-        windows,
-        monitor.bounds.topLeft +
-            Offset(
-              position.dx * monitor.bounds.width / viewport.width,
-              position.dy * monitor.bounds.height / viewport.height,
-            ),
-      );
-    }
+    _updatePointer(output, local);
     notifyListeners();
   }
 
-  void changeMode(CaptureMode value, Size viewport) {
-    if (busy || scroll != null || _origin != null || mode == value) return;
-    final previous = mode;
-    if (previous != .color) _previousMode = previous;
-    mode = value;
-    hoveredWindow = null;
-    message = null;
-    if (value == .color) {
-      if (_hover case final hover?) {
-        this.hover(hover.output, hover.position, hover.viewport);
-      } else {
-        nudgeColor(Offset.zero, viewport);
-      }
-      return;
-    }
-    final selectionOutput = _selectionOutput;
-    if (value == .region && selectionOutput != null) {
-      active = selectionOutput;
-      pointer = null;
-      notifyListeners();
-      return;
-    }
-    if (_hover case final hover?) {
-      this.hover(hover.output, hover.position, hover.viewport);
-    } else {
-      notifyListeners();
+  void _updatePointer(FrozenOutput output, Offset local) {
+    active = output;
+    pointer = local;
+    if (mode == .color) {
+      colorPixel = output.pixelAt(local, output.monitor.bounds.size);
+    } else if (mode == .window) {
+      hoveredWindow = windowAt(
+        output.monitor,
+        windows,
+        output.monitor.bounds.topLeft + local,
+      );
     }
   }
 
-  void toggleColor(Size viewport) =>
-      changeMode(mode == .color ? _previousMode : .color, viewport);
+  void changeMode(CaptureMode value) {
+    if (busy ||
+        scroll != null ||
+        _dragStart != null ||
+        toolbarDragSource != null ||
+        selection != null ||
+        mode == value ||
+        mode == .color ||
+        value == .color) {
+      return;
+    }
+    _mode = value;
+    hoveredWindow = null;
+    message = null;
+    if (pointer case final local?) _updatePointer(active, local);
+    notifyListeners();
+  }
 
-  void cycleMode(Size viewport) => changeMode(
-    CaptureMode.values[(mode.index + 1) % CaptureMode.values.length],
-    viewport,
-  );
+  void cycleMode() => changeMode(mode == .region ? .window : .region);
+
+  void startToolbarDrag(
+    FrozenOutput output,
+    Offset position,
+    Offset toolbarOrigin,
+    Size viewport,
+  ) {
+    if (busy || active != output || toolbarDragSource != null) return;
+    toolbarDragSource = output;
+    _toolbarGrab = _outputPoint(output, position - toolbarOrigin, viewport);
+  }
+
+  void updateToolbarDrag(Offset position, Size viewport) {
+    final source = toolbarDragSource;
+    if (source == null) return;
+    final global = _desktopPoint(source, position, viewport);
+    final target = _outputAt(global);
+    if (target == null) return;
+    final local = global - target.monitor.bounds.topLeft;
+    _updatePointer(target, local);
+    _toolbarPositions[target] = local - _toolbarGrab!;
+    notifyListeners();
+  }
+
+  void endToolbarDrag() {
+    if (toolbarDragSource == null) return;
+    toolbarDragSource = null;
+    _toolbarGrab = null;
+    notifyListeners();
+  }
 
   void cycleColorFormat() {
     const formats = <ColorFormat>[.hex, .rgb, .hsl, .oklch];
@@ -184,24 +208,21 @@ class CaptureSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  void nudgeColor(Offset delta, Size viewport) {
+  void nudgeColor(Offset delta) {
     final pixel = active.clampPixel(
       (colorPixel ?? active.size.center(Offset.zero)) + delta,
     );
     colorPixel = pixel;
-    _colorViewport = viewport;
-    pointer = active.logicalAt(pixel + const Offset(.5, .5), viewport);
+    pointer = active.logicalAt(
+      pixel + const Offset(.5, .5),
+      active.monitor.bounds.size,
+    );
     notifyListeners();
   }
 
   Offset get colorPosition {
-    final size = active.monitor.bounds.size;
-    final viewport = _colorViewport ?? size;
-    final local = pointer ?? viewport.center(Offset.zero);
-    return Offset(
-      (local.dx * size.width / viewport.width).floorToDouble(),
-      (local.dy * size.height / viewport.height).floorToDouble(),
-    );
+    final local = pointer ?? active.monitor.bounds.size.center(Offset.zero);
+    return Offset(local.dx.floorToDouble(), local.dy.floorToDouble());
   }
 
   PickedColor get colorSample {
@@ -224,67 +245,126 @@ class CaptureSession extends ChangeNotifier {
     if (busy || selection != null || scroll != null) return;
     hover(output, position, viewport);
     this.edit = edit;
-    _origin = position;
+    final global = _desktopPoint(output, position, viewport);
+    _dragStart = global;
+    _lastDragPoint = global;
+    _regionAnchor = global;
+    _crossedOutput = false;
     message = null;
     notifyListeners();
   }
 
   void updateDrag(FrozenOutput output, Offset position, Size viewport) {
-    final origin = _origin;
-    if (origin == null || active != output || mode != .region) return;
-    pointer = position;
-    if ((position - origin).distance >= 4 || draft != null) {
+    final start = _dragStart;
+    if (start == null || mode != .region) return;
+    final global = _desktopPoint(output, position, viewport);
+    final target = _outputAt(global);
+    if (target != null && target != active) {
+      _regionAnchor = _entryPoint(
+        target.monitor.bounds,
+        _lastDragPoint!,
+        global,
+      );
+      _crossedOutput = true;
+      draft = null;
+    }
+    _lastDragPoint = global;
+    final destination = target ?? active;
+    final bounds = destination.monitor.bounds;
+    final local = global - bounds.topLeft;
+    if (target != null) _hover = (output: target, position: local);
+    _updatePointer(destination, local);
+    final anchor = _regionAnchor!;
+    if ((global - anchor).distance >= 4 || draft != null) {
       draft = Rect.fromPoints(
-        origin,
-        position,
-      ).intersect(Offset.zero & viewport);
+        anchor,
+        global,
+      ).intersect(bounds).shift(-bounds.topLeft);
     }
     notifyListeners();
   }
 
   CaptureRequest? endDrag(FrozenOutput output, Offset position, Size viewport) {
-    final origin = _origin;
-    if (origin == null || output != active) return null;
+    final start = _dragStart;
+    if (start == null) return null;
+    final global = _desktopPoint(output, position, viewport);
     updateDrag(output, position, viewport);
-    _origin = null;
     final rect = draft;
+    final crossedOutput = _crossedOutput;
+    _dragStart = null;
+    _lastDragPoint = null;
+    _regionAnchor = null;
     draft = null;
-    if (mode == .window) {
-      final hit = hoveredWindow;
-      if (hit != null && (position - origin).distance < 4) {
-        return (
-          output: output,
-          rect: Offset.zero & output.size,
-          edit: edit,
-          window: hit,
-        );
-      }
+    final target = _outputAt(global);
+    if (target == null || target != active) {
       notifyListeners();
       return null;
     }
-    if (rect == null) return request;
-    setSelection(scaleRect(rect, viewport, output.size));
+    if (mode == .window) {
+      final hit = hoveredWindow;
+      if (hit != null && (global - start).distance < 4) return request;
+    } else if (rect != null && !rect.isEmpty) {
+      setSelection(scaleRect(rect, active.monitor.bounds.size, active.size));
+      return null;
+    } else if (!crossedOutput && (global - start).distance < 4) {
+      return request;
+    }
+    notifyListeners();
     return null;
   }
 
   void cancelDrag() {
-    _origin = null;
+    _dragStart = null;
+    _lastDragPoint = null;
+    _regionAnchor = null;
     draft = null;
     notifyListeners();
   }
 
   void setSelection(Rect value) {
     _selection = pixelRect(value, active.size);
-    _selectionOutput = active;
     message = null;
     notifyListeners();
   }
 
   void clearSelection() {
     _selection = null;
-    _selectionOutput = null;
     message = null;
+    if (_hover case final hover?) _updatePointer(hover.output, hover.position);
     notifyListeners();
+  }
+
+  FrozenOutput? _outputAt(Offset global) {
+    for (final output in outputs) {
+      if (output.monitor.bounds.contains(global)) return output;
+    }
+    return null;
+  }
+
+  Offset _outputPoint(FrozenOutput output, Offset local, Size viewport) {
+    final bounds = output.monitor.bounds;
+    return Offset(
+      local.dx * bounds.width / viewport.width,
+      local.dy * bounds.height / viewport.height,
+    );
+  }
+
+  Offset _desktopPoint(FrozenOutput output, Offset local, Size viewport) =>
+      output.monitor.bounds.topLeft + _outputPoint(output, local, viewport);
+
+  static Offset _entryPoint(Rect bounds, Offset previous, Offset current) {
+    final delta = current - previous;
+    final x = switch (previous.dx) {
+      final x when x < bounds.left => (bounds.left - x) / delta.dx,
+      final x when x > bounds.right => (bounds.right - x) / delta.dx,
+      _ => 0.0,
+    };
+    final y = switch (previous.dy) {
+      final y when y < bounds.top => (bounds.top - y) / delta.dy,
+      final y when y > bounds.bottom => (bounds.bottom - y) / delta.dy,
+      _ => 0.0,
+    };
+    return previous + delta * math.max(x, y);
   }
 
   CaptureRequest get request => (

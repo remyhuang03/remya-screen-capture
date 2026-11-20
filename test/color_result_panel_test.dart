@@ -21,11 +21,9 @@ void main() {
       final earlier = picked.withColor(Colors.white);
       final history = [picked, earlier];
       final clipboard = <String>[];
-      final heights = <double>[];
       var closed = false;
       var openedSettings = false;
-      var dragOffset = Offset.zero;
-      var dragEnds = 0;
+      var moves = 0;
       await tester.pumpWidget(
         RemyaScreenCaptureApp(
           home: Center(
@@ -48,9 +46,7 @@ void main() {
                 onOpenSettings: () async => openedSettings = true,
                 onPickAgain: () {},
                 onClose: () => closed = true,
-                onHeightChanged: heights.add,
-                onDrag: (delta) => dragOffset += delta,
-                onDragEnd: () => dragEnds++,
+                onMoveWindow: () => moves++,
               ),
             ),
           ),
@@ -62,8 +58,7 @@ void main() {
         const Offset(0, 40),
         kind: .mouse,
       );
-      expect(dragOffset, const Offset(0, 40));
-      expect(dragEnds, 1);
+      expect(moves, 1);
       expect(find.text('HEX copied'), findsOneWidget);
       await tester.sendKeyEvent(.digit2);
       await tester.pump();
@@ -77,7 +72,6 @@ void main() {
       expect(find.byTooltip('#FFFFFF'), findsNothing);
       await tester.sendKeyEvent(.keyA);
       await tester.pumpAndSettle();
-      expect(heights, [587]);
       expect(find.text('Adjust color'), findsOneWidget);
       final hue = find.byType(TextField).first;
       final start = int.parse(tester.widget<TextField>(hue).controller!.text);
@@ -99,7 +93,6 @@ void main() {
       );
       await tester.sendKeyEvent(.enter);
       await tester.pumpAndSettle();
-      expect(heights, [587, 695]);
       expect(history.first.color, isNot(picked.color));
       expect(clipboard.last, ColorFormat.hex.format(history.first.color));
       await tester.sendKeyEvent(.arrowDown);

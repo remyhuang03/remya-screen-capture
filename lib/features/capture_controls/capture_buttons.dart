@@ -407,9 +407,14 @@ ButtonStyle _style(
 );
 
 class CaptureSurface extends StatelessWidget {
-  const CaptureSurface({super.key, required this.child});
+  const CaptureSurface({
+    super.key,
+    required this.child,
+    this.padding = const .all(9),
+  });
 
   final Widget child;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +428,7 @@ class CaptureSurface extends StatelessWidget {
         side: BorderSide(color: colors.outlineVariant.withValues(alpha: .5)),
       ),
       clipBehavior: .antiAlias,
-      child: Padding(padding: const .all(9), child: child),
+      child: Padding(padding: padding, child: child),
     );
   }
 }
