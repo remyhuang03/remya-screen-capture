@@ -203,11 +203,13 @@ void main() {
         kind: PointerDeviceKind.mouse,
         buttons: kSecondaryMouseButton,
       );
+      expect(session.confinedOutput, output);
       await mouse.moveTo(const Offset(440, 360));
       await tester.pump();
       expect(toolbarHint, findsNothing);
       await mouse.cancel();
       await tester.pump();
+      expect(session.confinedOutput, isNull);
       expect(tester.getCenter(toolbarHint), before + const Offset(20, 48));
 
       final selection = await tester.startGesture(
@@ -218,6 +220,7 @@ void main() {
       await selection.moveTo(const Offset(440, 360));
       await selection.up();
       await tester.pump();
+      expect(session.confinedOutput, isNull);
       expect(find.text('Edit'), findsOneWidget);
       expect(session.selection, const Rect.fromLTRB(360, 300, 660, 540));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -376,7 +379,7 @@ void main() {
     });
   }
 
-  testWidgets('a dragged selection is rebuilt from the destination edge', (
+  testWidgets('a region drag stays on the display where it began', (
     tester,
   ) async {
     final left = _frozen(tester, monitor(x: -960));
@@ -395,25 +398,52 @@ void main() {
     final session = CaptureSession([left, right], [], left);
     addTearDown(session.dispose);
     final viewport = left.monitor.bounds.size;
-    session.startDrag(left, const Offset(900, 100), viewport, true);
+    session.hover(right, const Offset(100, 200), right.monitor.bounds.size);
+    expect(session.active, right);
+    expect(session.confinedOutput, isNull);
+    session.startDrag(
+      left,
+      const Offset(900, 100),
+      viewport,
+      true,
+      confinePointer: true,
+    );
+    expect(session.confinedOutput, left);
     session.updateDrag(left, const Offset(945, 140), viewport);
     expect(session.draft, const Rect.fromLTRB(900, 100, 945, 140));
+    session.updateDrag(left, const Offset(959, 199), viewport);
+    expect(session.pointer, const Offset(959, 199));
+    expect(session.draft, const Rect.fromLTRB(900, 100, 960, 199));
+    session.hover(right, const Offset(52, 171), right.monitor.bounds.size);
     session.updateDrag(left, const Offset(1036, 231), viewport);
-    expect(session.active, right);
-    expect(session.draft, const Rect.fromLTRB(0, 119, 52, 171));
+    expect(session.active, left);
+    expect(session.pointer, const Offset(960, 231));
+    expect(session.draft, const Rect.fromLTRB(900, 100, 960, 231));
     expect(session.endDrag(left, const Offset(1036, 231), viewport), isNull);
-    expect(session.request.output, right);
-    expect(session.selection, const Rect.fromLTRB(0, 238, 104, 342));
+    expect(session.confinedOutput, isNull);
+    expect(session.request.output, left);
+    expect(session.selection, const Rect.fromLTRB(1350, 150, 1440, 347));
     expect(session.request.edit, isTrue);
     session.clearSelection();
 
     session.startDrag(left, const Offset(950, 140), viewport, false);
     expect(session.endDrag(left, const Offset(985, 140), viewport), isNull);
+    expect(session.active, left);
+    expect(session.selection, isNull);
+    session.startDrag(
+      left,
+      const Offset(950, 140),
+      viewport,
+      false,
+      confinePointer: true,
+    );
+    session.updateDrag(left, const Offset(970, 200), viewport);
+    expect(session.draft, const Rect.fromLTRB(950, 140, 960, 200));
+    session.cancelDrag();
+    expect(session.confinedOutput, isNull);
+    expect(session.draft, isNull);
+    session.hover(right, const Offset(20, 20), right.monitor.bounds.size);
     expect(session.active, right);
-    expect(session.selection, isNull);
-    session.startDrag(left, const Offset(950, 140), viewport, false);
-    expect(session.endDrag(left, const Offset(970, 140), viewport), isNull);
-    expect(session.selection, isNull);
   });
 }
 

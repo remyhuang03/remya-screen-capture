@@ -23,6 +23,7 @@ function(generate_wayland_protocol name xml)
 endfunction()
 generate_wayland_protocol(xdg-output "${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-output/xdg-output-unstable-v1.xml")
 generate_wayland_protocol(viewporter "${WAYLAND_PROTOCOLS_DIR}/stable/viewporter/viewporter.xml")
+generate_wayland_protocol(pointer-constraints "${WAYLAND_PROTOCOLS_DIR}/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml")
 
 # Define the application target. To change its name, change BINARY_NAME in the
 # top-level CMakeLists.txt, not the value here, or `flutter run` will no longer

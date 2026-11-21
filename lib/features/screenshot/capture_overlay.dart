@@ -287,13 +287,14 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                           return;
                         }
                         _focus.requestFocus();
-                        _pointerId = event.pointer;
-                        session.startDrag(
+                        final accepted = session.startDrag(
                           output,
                           event.localPosition,
                           size,
                           event.buttons == kSecondaryMouseButton,
+                          confinePointer: event.kind == .mouse,
                         );
+                        if (accepted) _pointerId = event.pointer;
                       },
                       onPointerMove: (event) {
                         if (_pointerId == event.pointer) {

@@ -14,6 +14,7 @@
 #include "capture_plugins.h"
 #include "frozen_background.h"
 #include "my_application.h"
+#include "pointer-constraints-client-protocol.h"
 #include "xdg-output-client-protocol.h"
 
 namespace {
@@ -30,6 +31,45 @@ constexpr char kResidentApi[] =
 using OutputNames = std::map<std::string, GdkMonitor*>;
 using InputRegion =
     std::unique_ptr<cairo_region_t, decltype(&cairo_region_destroy)>;
+using PointerConstraints =
+    std::unique_ptr<zwp_pointer_constraints_v1,
+                    decltype(&zwp_pointer_constraints_v1_destroy)>;
+using ConfinedPointer =
+    std::unique_ptr<zwp_confined_pointer_v1,
+                    decltype(&zwp_confined_pointer_v1_destroy)>;
+
+PointerConstraints bind_pointer_constraints(GdkDisplay* display) {
+  PointerConstraints constraints(nullptr, zwp_pointer_constraints_v1_destroy);
+  auto* wayland = gdk_wayland_display_get_wl_display(display);
+  auto* queue = wl_display_create_queue(wayland);
+  if (queue == nullptr) return constraints;
+  auto* wrapper = wl_proxy_create_wrapper(wayland);
+  if (wrapper != nullptr) {
+    // Discover globals without dispatching GDK events during window setup.
+    wl_proxy_set_queue(static_cast<wl_proxy*>(wrapper), queue);
+    auto* registry = wl_display_get_registry(static_cast<wl_display*>(wrapper));
+    wl_proxy_wrapper_destroy(wrapper);
+    const wl_registry_listener listener = {
+        [](void* data, wl_registry* registry, uint32_t name,
+           const char* interface, uint32_t) {
+          if (g_str_equal(interface, zwp_pointer_constraints_v1_interface.name)) {
+            static_cast<PointerConstraints*>(data)->reset(
+                static_cast<zwp_pointer_constraints_v1*>(wl_registry_bind(
+                    registry, name, &zwp_pointer_constraints_v1_interface, 1)));
+          }
+        },
+        [](void*, wl_registry*, uint32_t) {},
+    };
+    wl_registry_add_listener(registry, &listener, &constraints);
+    if (wl_display_roundtrip_queue(wayland, queue) < 0) constraints.reset();
+    wl_registry_destroy(registry);
+    if (constraints) {
+      wl_proxy_set_queue(reinterpret_cast<wl_proxy*>(constraints.get()), nullptr);
+    }
+  }
+  wl_event_queue_destroy(queue);
+  return constraints;
+}
 
 OutputNames get_named_outputs(GdkDisplay* display) {
   if (!GDK_IS_WAYLAND_DISPLAY(display) || !gtk_layer_is_supported()) return {};
@@ -238,6 +278,7 @@ class CaptureWindows {
     int drag_x = 0;
     int drag_y = 0;
     InputRegion input_region{nullptr, cairo_region_destroy};
+    ConfinedPointer confined_pointer{nullptr, zwp_confined_pointer_v1_destroy};
 
     std::unique_ptr<FrozenBackground> background;
     bool background_visible = true;
@@ -271,6 +312,7 @@ class CaptureWindows {
     }
 
     void hide() {
+      confined_pointer.reset();
       show_after_first_frame = false;
       const bool was_mapped = gtk_widget_get_mapped(window);
       if (background) background->unmap();
@@ -462,6 +504,13 @@ class CaptureWindows {
       fl_method_call_respond_success(call, result, nullptr);
     } else if (g_str_equal(method, "input")) {
       set_input(call, args, window);
+    } else if (g_str_equal(method, "confinePointer")) {
+      confine_pointer(window);
+      success(call);
+    } else if (g_str_equal(method, "releasePointer")) {
+      window.confined_pointer.reset();
+      gdk_display_flush(display_);
+      success(call);
     } else if (g_str_equal(method, "beginMove")) {
       if (!window.is_layer() && window.drag_time != GDK_CURRENT_TIME) {
         gtk_window_begin_move_drag(GTK_WINDOW(window.window), 1, window.drag_x,
@@ -505,6 +554,10 @@ class CaptureWindows {
                       : recording_setup ? Role::recording_setup
                       : recording_hud   ? Role::recording_hud
                                         : Role::result;
+    if (overlay && !checked_pointer_constraints_) {
+      pointer_constraints_ = bind_pointer_constraints(display_);
+      checked_pointer_constraints_ = true;
+    }
     for (auto& entry : windows_) {
       auto& state = *entry.second;
       if (state.active || state.role != role) continue;
@@ -572,6 +625,10 @@ class CaptureWindows {
 
     g_signal_connect(widget, "destroy", G_CALLBACK(window_destroyed),
                      state.get());
+    if (overlay) {
+      g_signal_connect(widget, "unmap", G_CALLBACK(overlay_unmapped),
+                       state.get());
+    }
     windows_.emplace(id, std::move(state));
     gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
     respond_view(call, id);
@@ -580,6 +637,39 @@ class CaptureWindows {
   static void respond_view(FlMethodCall* call, int64_t id) {
     g_autoptr(FlValue) value = fl_value_new_int(id);
     fl_method_call_respond_success(call, value, nullptr);
+  }
+
+  void confine_pointer(Window& window) {
+    if (!pointer_constraints_ || window.role != Role::overlay ||
+        window.confined_pointer || !gtk_widget_get_mapped(window.window)) {
+      return;
+    }
+    auto* seat = gdk_display_get_default_seat(display_);
+    if (seat == nullptr) return;
+    auto* device = gdk_seat_get_pointer(seat);
+    if (device == nullptr) return;
+    auto* pointer = gdk_wayland_device_get_wl_pointer(device);
+    auto* surface = gdk_wayland_window_get_wl_surface(
+        gtk_widget_get_window(window.window));
+    if (pointer == nullptr || surface == nullptr) return;
+
+    window.confined_pointer.reset(zwp_pointer_constraints_v1_confine_pointer(
+        pointer_constraints_.get(), surface, pointer, nullptr,
+        ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_ONESHOT));
+    if (!window.confined_pointer) return;
+    static const zwp_confined_pointer_v1_listener listener = {
+        [](void*, zwp_confined_pointer_v1*) {},
+        [](void* data, zwp_confined_pointer_v1*) {
+          static_cast<Window*>(data)->confined_pointer.reset();
+        },
+    };
+    zwp_confined_pointer_v1_add_listener(window.confined_pointer.get(),
+                                         &listener, &window);
+    gdk_display_flush(display_);
+  }
+
+  static void overlay_unmapped(GtkWidget*, gpointer data) {
+    static_cast<Window*>(data)->confined_pointer.reset();
   }
 
   void set_input(FlMethodCall* call, FlValue* args, Window& window) {
@@ -683,11 +773,12 @@ class CaptureWindows {
     return TRUE;
   }
 
-  static void window_destroyed(GtkWidget*, gpointer data) {
+  static void window_destroyed(GtkWidget* widget, gpointer data) {
     const auto& window = *static_cast<Window*>(data);
     auto* self = window.host;
     const auto id = window.id;
     const bool active = window.active;
+    g_signal_handlers_disconnect_by_data(widget, data);
     self->windows_.erase(id);
     if (active) self->emit("closed", id);
   }
@@ -712,6 +803,9 @@ class CaptureWindows {
   FlEngine* engine_ = nullptr;
   FlMethodChannel* channel_ = nullptr;
   FlMethodChannel* sessions_ = nullptr;
+  bool checked_pointer_constraints_ = false;
+  PointerConstraints pointer_constraints_{nullptr,
+                                          zwp_pointer_constraints_v1_destroy};
   std::unique_ptr<FrozenBackgroundProtocol> background_protocol_;
   std::map<int64_t, std::unique_ptr<Window>> windows_;
 };

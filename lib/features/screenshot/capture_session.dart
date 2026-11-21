@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -94,10 +93,7 @@ class CaptureSession extends ChangeNotifier {
   String? message;
   ScrollPreview? scroll;
 
-  Offset? _dragStart;
-  Offset? _lastDragPoint;
-  Offset? _regionAnchor;
-  bool _crossedOutput = false;
+  ({FrozenOutput output, Offset start, bool confine})? _drag;
   Rect? draft;
 
   final _toolbarPositions = <FrozenOutput, Offset>{};
@@ -105,7 +101,9 @@ class CaptureSession extends ChangeNotifier {
   Offset? _toolbarGrab;
 
   Rect? get selection => _selection;
-  bool get dragging => _dragStart != null || toolbarDragSource != null;
+  bool get dragging => _drag != null || toolbarDragSource != null;
+  FrozenOutput? get confinedOutput =>
+      _drag?.confine == true ? _drag?.output : null;
   Offset? toolbarPosition(FrozenOutput output) => _toolbarPositions[output];
 
   void setUppercaseHex(bool value) {
@@ -115,12 +113,12 @@ class CaptureSession extends ChangeNotifier {
   }
 
   void hover(FrozenOutput output, Offset position, Size viewport) {
+    if (_drag != null) return;
     final local = _outputPoint(output, position, viewport);
     _hover = (output: output, position: local);
     if (busy ||
         scroll != null ||
         selection != null ||
-        _dragStart != null ||
         toolbarDragSource != null) {
       return;
     }
@@ -145,8 +143,7 @@ class CaptureSession extends ChangeNotifier {
   void changeMode(CaptureMode value) {
     if (busy ||
         scroll != null ||
-        _dragStart != null ||
-        toolbarDragSource != null ||
+        dragging ||
         selection != null ||
         mode == value ||
         mode == .color ||
@@ -168,7 +165,7 @@ class CaptureSession extends ChangeNotifier {
     Offset toolbarOrigin,
     Size viewport,
   ) {
-    if (busy || active != output || toolbarDragSource != null) return;
+    if (busy || active != output || dragging) return;
     toolbarDragSource = output;
     _toolbarGrab = _outputPoint(output, position - toolbarOrigin, viewport);
   }
@@ -236,87 +233,73 @@ class CaptureSession extends ChangeNotifier {
     );
   }
 
-  void startDrag(
+  bool startDrag(
     FrozenOutput output,
     Offset position,
     Size viewport,
-    bool edit,
-  ) {
-    if (busy || selection != null || scroll != null) return;
-    hover(output, position, viewport);
+    bool edit, {
+    bool confinePointer = false,
+  }) {
+    if (busy || dragging || selection != null || scroll != null) return false;
+    final local = _outputPoint(output, position, viewport);
+    _hover = (output: output, position: local);
+    _updatePointer(output, local);
     this.edit = edit;
-    final global = _desktopPoint(output, position, viewport);
-    _dragStart = global;
-    _lastDragPoint = global;
-    _regionAnchor = global;
-    _crossedOutput = false;
+    _drag = (
+      output: output,
+      start: output.monitor.bounds.topLeft + local,
+      confine: mode == .region && confinePointer,
+    );
     message = null;
     notifyListeners();
+    return true;
   }
 
   void updateDrag(FrozenOutput output, Offset position, Size viewport) {
-    final start = _dragStart;
-    if (start == null || mode != .region) return;
+    final drag = _drag;
+    if (drag == null || mode != .region) return;
     final global = _desktopPoint(output, position, viewport);
-    final target = _outputAt(global);
-    if (target != null && target != active) {
-      _regionAnchor = _entryPoint(
-        target.monitor.bounds,
-        _lastDragPoint!,
-        global,
-      );
-      _crossedOutput = true;
-      draft = null;
-    }
-    _lastDragPoint = global;
-    final destination = target ?? active;
-    final bounds = destination.monitor.bounds;
-    final local = global - bounds.topLeft;
-    if (target != null) _hover = (output: target, position: local);
-    _updatePointer(destination, local);
-    final anchor = _regionAnchor!;
-    if ((global - anchor).distance >= 4 || draft != null) {
+    final bounds = drag.output.monitor.bounds;
+    final bounded = Offset(
+      global.dx.clamp(bounds.left, bounds.right),
+      global.dy.clamp(bounds.top, bounds.bottom),
+    );
+    final local = bounded - bounds.topLeft;
+    _hover = (output: drag.output, position: local);
+    _updatePointer(drag.output, local);
+    if ((global - drag.start).distance >= 4 || draft != null) {
       draft = Rect.fromPoints(
-        anchor,
-        global,
-      ).intersect(bounds).shift(-bounds.topLeft);
+        _selectionEdge(drag.start - bounds.topLeft, bounds.size),
+        _selectionEdge(local, bounds.size),
+      );
     }
     notifyListeners();
   }
 
   CaptureRequest? endDrag(FrozenOutput output, Offset position, Size viewport) {
-    final start = _dragStart;
-    if (start == null) return null;
+    final drag = _drag;
+    if (drag == null) return null;
     final global = _desktopPoint(output, position, viewport);
     updateDrag(output, position, viewport);
     final rect = draft;
-    final crossedOutput = _crossedOutput;
-    _dragStart = null;
-    _lastDragPoint = null;
-    _regionAnchor = null;
+    _drag = null;
     draft = null;
-    final target = _outputAt(global);
-    if (target == null || target != active) {
-      notifyListeners();
+    if (rect != null && !rect.isEmpty) {
+      final source = drag.output;
+      setSelection(scaleRect(rect, source.monitor.bounds.size, source.size));
       return null;
-    }
-    if (mode == .window) {
-      final hit = hoveredWindow;
-      if (hit != null && (global - start).distance < 4) return request;
-    } else if (rect != null && !rect.isEmpty) {
-      setSelection(scaleRect(rect, active.monitor.bounds.size, active.size));
-      return null;
-    } else if (!crossedOutput && (global - start).distance < 4) {
-      return request;
     }
     notifyListeners();
+    if (drag.output.monitor.bounds.contains(global) &&
+        (global - drag.start).distance < 4 &&
+        (mode != .window || hoveredWindow != null)) {
+      return request;
+    }
     return null;
   }
 
   void cancelDrag() {
-    _dragStart = null;
-    _lastDragPoint = null;
-    _regionAnchor = null;
+    _drag = null;
     draft = null;
     notifyListeners();
   }
@@ -352,20 +335,11 @@ class CaptureSession extends ChangeNotifier {
   Offset _desktopPoint(FrozenOutput output, Offset local, Size viewport) =>
       output.monitor.bounds.topLeft + _outputPoint(output, local, viewport);
 
-  static Offset _entryPoint(Rect bounds, Offset previous, Offset current) {
-    final delta = current - previous;
-    final x = switch (previous.dx) {
-      final x when x < bounds.left => (bounds.left - x) / delta.dx,
-      final x when x > bounds.right => (bounds.right - x) / delta.dx,
-      _ => 0.0,
-    };
-    final y = switch (previous.dy) {
-      final y when y < bounds.top => (bounds.top - y) / delta.dy,
-      final y when y > bounds.bottom => (bounds.bottom - y) / delta.dy,
-      _ => 0.0,
-    };
-    return previous + delta * math.max(x, y);
-  }
+  // Hyprland stops at the last logical pixel. The crop edge is exclusive.
+  Offset _selectionEdge(Offset point, Size size) => Offset(
+    point.dx >= size.width - 1 ? size.width : point.dx,
+    point.dy >= size.height - 1 ? size.height : point.dy,
+  );
 
   CaptureRequest get request => (
     output: active,

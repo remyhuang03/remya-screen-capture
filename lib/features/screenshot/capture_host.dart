@@ -52,6 +52,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   int? _editorView;
   int? _resultView;
   int? _keyboardView;
+  int? _confinedView;
   ui.Image? _resultImage;
   String? _editorPath;
   int _revision = 0;
@@ -248,7 +249,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       }
       await _configureInput(session);
       if (!_current(revision)) return;
-      session.addListener(_syncKeyboard);
+      session.addListener(_syncOverlayInput);
       await Future.wait([
         for (final id in _overlays.values.toList())
           changeCaptureWindow('show', id),
@@ -786,9 +787,10 @@ return "pending"
     unawaited(run.rendering.restore().catchError((Object _) {}));
   }
 
-  void _syncKeyboard() {
+  void _syncOverlayInput() {
     final session = _session;
     if (session == null || session.scroll != null) return;
+    _setConfinedView(_overlays[session.confinedOutput?.name]);
     final target = _overlays[session.active.name];
     if (_keyboardView == target) return;
     unawaited(
@@ -796,6 +798,16 @@ return "pending"
         if (_session == session) session.setBusy(false, error: _message(error));
       }),
     );
+  }
+
+  void _setConfinedView(int? id) {
+    final previous = _confinedView;
+    if (previous == id) return;
+    _confinedView = id;
+    if (previous != null) {
+      unawaited(changeCaptureWindow('releasePointer', previous));
+    }
+    if (id != null) unawaited(changeCaptureWindow('confinePointer', id));
   }
 
   Future<void> _configureInput(CaptureSession session) {
@@ -837,13 +849,14 @@ return "pending"
   }
 
   Future<void> _endCapture() async {
+    _setConfinedView(null);
     final ids = _overlays.values.toList();
     _overlays.clear();
     _keyboardView = null;
     final session = _session;
     _session = null;
     _stopScroll();
-    session?.removeListener(_syncKeyboard);
+    session?.removeListener(_syncOverlayInput);
     if (mounted && ids.isNotEmpty) setState(() => ids.forEach(_widgets.remove));
     for (final id in ids) {
       await changeCaptureWindow('hide', id);
@@ -853,10 +866,11 @@ return "pending"
   }
 
   void _disposeSession() {
+    _setConfinedView(null);
     _stopScroll();
     final session = _session;
     _session = null;
-    session?.removeListener(_syncKeyboard);
+    session?.removeListener(_syncOverlayInput);
     _releaseSession(session);
   }
 
