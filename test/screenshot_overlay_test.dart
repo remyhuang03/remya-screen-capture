@@ -92,6 +92,67 @@ void main() {
     },
   );
 
+  test(
+    'launch metadata matches named and special workspaces by address',
+    () async {
+      const active = {'address': 'design', 'type': 'normal', 'name': 'design'};
+      const special = {
+        'address': 'special:tools',
+        'type': 'special',
+        'name': 'tools',
+      };
+      final client = {
+        'monitor': 1,
+        'mapped': true,
+        'hidden': false,
+        'pinned': false,
+        'floating': false,
+        'fullscreen': 0,
+        'class': 'Browser',
+        'title': 'Test window',
+        'at': [10, 30],
+        'size': [500, 400],
+      };
+      final (monitors, windows) = await (
+        readMonitors(
+          snapshot: jsonEncode([
+            {
+              'id': 1,
+              'name': 'DP-1',
+              'focused': true,
+              'x': 0,
+              'y': 0,
+              'width': 1440,
+              'height': 1050,
+              'scale': 1.5,
+              'transform': 0,
+              'mirrorOf': 'none',
+              'activeWorkspace': active,
+              'specialWorkspace': special,
+            },
+          ]),
+        ),
+        readWindows(
+          snapshot: jsonEncode([
+            {...client, 'stableId': 'active', 'workspace': active},
+            {...client, 'stableId': 'special', 'workspace': special},
+            {
+              ...client,
+              'stableId': 'other',
+              'workspace': {'address': 'other'},
+            },
+          ]),
+        ),
+      ).wait;
+      const cursor = Offset(20, 40);
+      expect(
+        windowAt(monitors.single, [windows.first, windows.last], cursor)?.id,
+        'active',
+      );
+      expect(windowAt(monitors.single, windows, cursor)?.id, 'special');
+    },
+  );
+
   test('window hit testing respects workspace, layer and stacking order', () {
     final output = monitor();
     final tiled = window('a');

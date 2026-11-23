@@ -9,8 +9,8 @@ class CaptureMonitor {
     : id = data['id'] as int,
       name = data['name'] as String,
       focused = data['focused'] as bool,
-      workspace = (data['activeWorkspace'] as Map)['id'] as int,
-      specialWorkspace = (data['specialWorkspace'] as Map)['id'] as int? ?? 0,
+      workspace = _workspaceAddress(data['activeWorkspace'] as Map),
+      specialWorkspace = _workspaceAddress(data['specialWorkspace'] as Map),
       scale = (data['scale'] as num).toDouble(),
       pixelSize = _monitorPixelSize(data),
       bounds = _monitorBounds(data);
@@ -18,8 +18,8 @@ class CaptureMonitor {
   final int id;
   final String name;
   final bool focused;
-  final int workspace;
-  final int specialWorkspace;
+  final String? workspace;
+  final String? specialWorkspace;
   final double scale;
   final Size pixelSize;
   final Rect bounds;
@@ -48,7 +48,7 @@ class CaptureWindow {
   CaptureWindow(Map<String, dynamic> data)
     : id = data['stableId'] as String? ?? '',
       monitor = data['monitor'] as int,
-      workspace = (data['workspace'] as Map)['id'] as int,
+      workspace = _workspaceAddress(data['workspace'] as Map),
       mapped = data['mapped'] as bool,
       hidden = data['hidden'] as bool,
       pinned = data['pinned'] as bool,
@@ -61,7 +61,7 @@ class CaptureWindow {
 
   final String id;
   final int monitor;
-  final int workspace;
+  final String? workspace;
   final bool mapped;
   final bool hidden;
   final bool pinned;
@@ -82,6 +82,13 @@ class CaptureWindow {
       size[1].toDouble(),
     );
   }
+}
+
+String? _workspaceAddress(Map workspace) {
+  final address = workspace['address'] as String?;
+  if (address != null && address.isNotEmpty) return address;
+  final id = workspace['id'] as int?;
+  return id == 0 ? null : id?.toString();
 }
 
 Future<List<CaptureMonitor>> readMonitors({String? snapshot}) async {
@@ -145,19 +152,21 @@ CaptureWindow? windowAt(
                 window.floating &&
                 window.bounds.overlaps(monitor.bounds))) &&
         (window.pinned ||
-            window.workspace == monitor.workspace ||
-            (monitor.specialWorkspace != 0 &&
-                window.workspace == monitor.specialWorkspace)),
+            (window.workspace != null &&
+                (window.workspace == monitor.workspace ||
+                    window.workspace == monitor.specialWorkspace))),
   );
-  final workspaceFullscreen = candidates.any(
-    (window) => window.fullscreen && window.workspace == monitor.workspace,
-  );
+  final workspaceFullscreen =
+      monitor.workspace != null &&
+      candidates.any(
+        (window) => window.fullscreen && window.workspace == monitor.workspace,
+      );
   CaptureWindow? hit;
   var best = -1;
   for (final window in candidates) {
     if (!window.bounds.contains(globalPosition)) continue;
     final special =
-        monitor.specialWorkspace != 0 &&
+        monitor.specialWorkspace != null &&
         window.workspace == monitor.specialWorkspace;
     final rank = switch (window) {
       _ when window.pinned => 6,
