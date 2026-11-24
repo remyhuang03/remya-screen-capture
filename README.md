@@ -118,6 +118,8 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 ### Prerequisites & Setup
 
+[NixOS development and capture smoke test](docs/nixos-debug.md)
+
 - FVM with Flutter SDK `3.47.9`
 - Rust toolchain managed by `rustup`
 - Flutter Linux build dependencies
