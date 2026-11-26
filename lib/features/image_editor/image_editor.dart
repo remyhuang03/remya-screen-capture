@@ -10,6 +10,7 @@ import '../capture_controls/capture_buttons.dart';
 import '../capture_controls/capture_color_picker.dart';
 import '../capture_controls/capture_icon.dart';
 import '../capture_controls/capture_labels.dart';
+import '../capture_controls/capture_selection.dart';
 import '../capture_controls/capture_slider.dart';
 import '../capture_controls/capture_swatch.dart';
 import '../settings/open_settings.dart';
@@ -782,24 +783,27 @@ class _ImageEditorState extends State<ImageEditor> {
     final point = view.toImage(position);
     final tolerance = 9 / view.scale;
     if (_tool == .move) {
-      if (drag?.object != null && drag?.handle == null) {
-        return SystemMouseCursors.grabbing;
+      if (drag?.handle case final handle?) return selectionResizeCursor(handle);
+      if (drag?.object != null) return SystemMouseCursors.grabbing;
+      if (_selection case final selection?) {
+        if (_nearestHandle(selection.bounds, point, tolerance)
+            case final handle?) {
+          return selectionResizeCursor(handle);
+        }
       }
-      final selection = _selection;
-      final canDrag =
-          view.crop.contains(point) &&
-          (selection == null ||
-              _nearestHandle(selection.bounds, point, tolerance) == null);
-      return canDrag ? SystemMouseCursors.grab : SystemMouseCursors.basic;
+      return view.crop.contains(point)
+          ? SystemMouseCursors.grab
+          : SystemMouseCursors.basic;
     }
     if (drag?.rect != null) {
-      if (drag!.handle != null) return SystemMouseCursors.basic;
+      if (drag!.handle case final handle?) return selectionResizeCursor(handle);
       return drag.createCrop
           ? SystemMouseCursors.precise
           : SystemMouseCursors.grabbing;
     }
     return switch (_cropTarget(point, tolerance)) {
-      null || (handle: Alignment(), create: _) => SystemMouseCursors.basic,
+      null => SystemMouseCursors.basic,
+      (handle: final handle?, create: _) => selectionResizeCursor(handle),
       (handle: null, create: true) => SystemMouseCursors.precise,
       (handle: null, create: false) => SystemMouseCursors.grab,
     };
