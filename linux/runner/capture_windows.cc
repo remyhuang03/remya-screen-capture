@@ -628,6 +628,10 @@ class CaptureWindows {
     if (overlay) {
       g_signal_connect(widget, "unmap", G_CALLBACK(overlay_unmapped),
                        state.get());
+      g_signal_connect(widget, "key-press-event", G_CALLBACK(overlay_escape),
+                       state.get());
+      g_signal_connect(widget, "key-release-event", G_CALLBACK(overlay_escape),
+                       state.get());
     }
     windows_.emplace(id, std::move(state));
     gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
@@ -666,6 +670,14 @@ class CaptureWindows {
     zwp_confined_pointer_v1_add_listener(window.confined_pointer.get(),
                                          &listener, &window);
     gdk_display_flush(display_);
+  }
+
+  static gboolean overlay_escape(GtkWidget*, GdkEventKey* event, gpointer data) {
+    const auto& window = *static_cast<Window*>(data);
+    if (!window.active || event->keyval != GDK_KEY_Escape) return FALSE;
+    // The compositor can focus the window before Flutter has built its overlay.
+    if (event->type == GDK_KEY_PRESS) window.host->emit("overlayEscape");
+    return TRUE;
   }
 
   static void overlay_unmapped(GtkWidget*, gpointer data) {

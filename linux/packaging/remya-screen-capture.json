@@ -32,7 +32,7 @@
       "title": "Startup mode",
       "page": "startup",
       "keywords": ["startup", "fast", "background"],
-      "default": false,
+      "default": true,
       "schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "boolean"

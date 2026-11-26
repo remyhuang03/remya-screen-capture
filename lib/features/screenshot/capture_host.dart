@@ -107,6 +107,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           await _endCapture();
           await _showError('The display layout changed. Start a new capture.');
         }
+      case 'overlayEscape':
+        await _back();
       case 'closeRequested':
         final id = (call.arguments as Map?)?['id'];
         if (_errorVisible || (_colorView != null && id == _colorView)) {

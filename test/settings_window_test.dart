@@ -115,21 +115,21 @@ void main() {
     final choices = find.byType(SettingsSegmentedButton<bool>);
     expect(
       tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
-      false,
+      true,
     );
-    await tester.tap(find.text('Fast startup'));
+    await tester.tap(find.text('On demand'));
     await tester.pumpAndSettle();
     expect(preferences.writes, ['resident-startup']);
-    expect(preferences.values['resident-startup'], true);
+    expect(preferences.values['resident-startup'], false);
+    expect(
+      tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
+      false,
+    );
+    preferences.external('resident-startup', true);
+    await tester.pumpAndSettle();
     expect(
       tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
       true,
-    );
-    preferences.external('resident-startup', false);
-    await tester.pumpAndSettle();
-    expect(
-      tester.widget<SettingsSegmentedButton<bool>>(choices).selected,
-      false,
     );
   });
 

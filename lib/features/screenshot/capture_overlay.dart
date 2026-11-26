@@ -540,6 +540,7 @@ class _ModeToolbar extends StatelessWidget {
               const CaptureDivider(),
               _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
               _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
+              if (mode == .region) const _Hint('Click', 'Capture full screen'),
               const _Hint('Tab', 'Switch'),
             ],
             const _Hint('Esc', 'Cancel'),

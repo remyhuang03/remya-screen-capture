@@ -234,10 +234,14 @@ void main() {
         ),
       );
       expect(find.text('Pick color'), findsNothing);
+      final fullScreenHint = find.text('Capture full screen');
+      expect(fullScreenHint, findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       expect(session.mode, CaptureMode.region);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       expect(session.mode, CaptureMode.window);
+      await tester.pump();
+      expect(fullScreenHint, findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       expect(session.mode, CaptureMode.region);
       await tester.pump();
@@ -246,11 +250,11 @@ void main() {
       final frozenImage = tester.widget<RawImage>(find.byType(RawImage));
       await tester.dragFrom(
         before,
-        const Offset(20, 48),
+        const Offset(0, 48),
         kind: PointerDeviceKind.mouse,
       );
       await tester.pump();
-      expect(tester.getCenter(toolbarHint), before + const Offset(20, 48));
+      expect(tester.getCenter(toolbarHint), before + const Offset(0, 48));
       expect(tester.widget<RawImage>(find.byType(RawImage)), same(frozenImage));
       expect(requests, isEmpty);
 
@@ -271,7 +275,7 @@ void main() {
       await mouse.cancel();
       await tester.pump();
       expect(session.confinedOutput, isNull);
-      expect(tester.getCenter(toolbarHint), before + const Offset(20, 48));
+      expect(tester.getCenter(toolbarHint), before + const Offset(0, 48));
 
       final selection = await tester.startGesture(
         const Offset(240, 200),
