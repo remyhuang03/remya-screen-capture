@@ -142,16 +142,34 @@ void main() {
     expect(inputs[2]!.rectangles.single.height, 4);
     expect(inputs[2]!.keyboard, isFalse);
     expect(find.text('00:42'), findsNothing);
+    final handle = find.descendant(
+      of: find.byType(RecordingHud).last,
+      matching: find.byType(DecoratedBox),
+    );
+    expect(tester.getSize(handle), const Size(40, 4));
     expect(
       find.byType(CustomPaint).at(1),
       paintsExactlyCountTimes(#drawColor, 1),
     );
 
+    cursor = Offset(docked.center.dx, 12);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('00:42'), findsNothing);
+
+    // Fall back to the compositor position even without a Flutter enter event.
     cursor = Offset(docked.center.dx, 2);
-    await mouse.moveTo(Offset(800 + docked.center.dx, 2));
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.pump();
     expect(inputs[2]!.rectangles.single, docked);
     expect(find.text('00:42'), findsOneWidget);
+
+    cursor = const Offset(720, 400);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 400));
+    await mouse.moveTo(Offset(800 + docked.center.dx, 2));
+    await tester.pump();
+    expect(inputs[2]!.rectangles.single, docked);
+
     controller.dispose();
     await mouse.removePointer();
     await tester.pumpWidget(const SizedBox());
