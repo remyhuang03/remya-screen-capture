@@ -234,14 +234,43 @@ void main() {
         ),
       );
       expect(find.text('Pick color'), findsNothing);
-      final fullScreenHint = find.text('Capture full screen');
-      expect(fullScreenHint, findsOneWidget);
+      final regionHints = find.ancestor(
+        of: find.text('Full screen'),
+        matching: find.byType(CaptureSurface),
+      );
+      expect(regionHints, findsNothing);
+      final hover = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await hover.addPointer(location: const Offset(470, 300));
+      await tester.pump();
+      final pixelLabel = find.ancestor(
+        of: find.textContaining(' · #'),
+        matching: find.byType(CaptureTooltipLabel),
+      );
+      expect(find.text('Drag'), findsOneWidget);
+      expect(find.text('Click'), findsOneWidget);
+      expect(tester.getCenter(regionHints).dx, 470);
+      expect(tester.getBottomLeft(regionHints).dy, 288);
+      expect(tester.getCenter(pixelLabel).dx, 470);
+      expect(tester.getTopLeft(pixelLabel).dy, greaterThan(328));
+      await hover.moveTo(const Offset(490, 320));
+      await tester.pump();
+      expect(tester.getCenter(regionHints).dx, 490);
+      expect(tester.getBottomLeft(regionHints).dy, 308);
+      await hover.moveTo(const Offset(950, 690));
+      await tester.pump();
+      expect(tester.getBottomRight(pixelLabel).dy, 678);
+      expect(tester.getBottomRight(regionHints).dx, 960);
+      expect(
+        tester.getBottomLeft(regionHints).dy,
+        lessThan(tester.getTopLeft(pixelLabel).dy),
+      );
+      await hover.removePointer();
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       expect(session.mode, CaptureMode.region);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       expect(session.mode, CaptureMode.window);
       await tester.pump();
-      expect(fullScreenHint, findsNothing);
+      expect(regionHints, findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       expect(session.mode, CaptureMode.region);
       await tester.pump();
@@ -269,6 +298,8 @@ void main() {
         buttons: kSecondaryMouseButton,
       );
       expect(session.confinedOutput, output);
+      await tester.pump();
+      expect(regionHints, findsNothing);
       await mouse.moveTo(const Offset(440, 360));
       await tester.pump();
       expect(toolbarHint, findsNothing);

@@ -320,7 +320,12 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                   ),
                 ),
               if (regionPointer != null && !session.busy)
-                _Loupe(output: output, pointer: regionPointer, viewport: size),
+                _Loupe(
+                  output: output,
+                  pointer: regionPointer,
+                  viewport: size,
+                  showHints: !session.dragging,
+                ),
               if (picking && active)
                 if ((session.colorPixel, pointer) case (
                   final pixel?,
@@ -538,9 +543,8 @@ class _ModeToolbar extends StatelessWidget {
                 onChanged: onChanged,
               ),
               const CaptureDivider(),
-              _Hint(mode == .region ? 'LMB' : 'Click', 'Copy'),
+              if (mode == .window) const _Hint('Click', 'Copy'),
               _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
-              if (mode == .region) const _Hint('Click', 'Capture full screen'),
               const _Hint('Tab', 'Switch'),
             ],
             const _Hint('Esc', 'Cancel'),
@@ -759,49 +763,118 @@ class _Loupe extends StatelessWidget {
     required this.output,
     required this.pointer,
     required this.viewport,
+    required this.showHints,
   });
 
   final FrozenOutput output;
   final Offset pointer;
   final Size viewport;
+  final bool showHints;
 
   @override
   Widget build(BuildContext context) {
-    const extent = 144.0;
-    const gap = 24.0;
-    final x = pointer.dx + gap + extent <= viewport.width
-        ? pointer.dx + gap
-        : math.max(0.0, pointer.dx - gap - extent);
-    final y = pointer.dy + gap + extent + 32 <= viewport.height
-        ? pointer.dy + gap
-        : math.max(0.0, pointer.dy - gap - extent - 32);
     final pixel = output.pixelAt(pointer, viewport);
     final colors = Theme.of(context).colorScheme;
     final color = output.colorAt(pixel).toARGB32() & 0xffffff;
     final hex = color.toRadixString(16).padLeft(6, '0').toUpperCase();
-    return Positioned(
-      left: x,
-      top: y,
-      child: IgnorePointer(
-        child: Column(
-          crossAxisAlignment: .start,
-          spacing: 8,
-          children: [
-            ClipRRect(
-              borderRadius: .circular(32),
-              child: CustomPaint(
-                painter: _LoupePaint(output, pixel, colors.primary),
-                size: const Size.square(extent),
-              ),
+    return IgnorePointer(
+      child: CustomMultiChildLayout(
+        delegate: _LoupeLayout(pointer),
+        children: [
+          if (showHints)
+            LayoutId(id: _LoupePart.hints, child: const _RegionPointerHints()),
+          LayoutId(
+            id: _LoupePart.preview,
+            child: Column(
+              mainAxisSize: .min,
+              spacing: 8,
+              children: [
+                ClipRRect(
+                  borderRadius: .circular(32),
+                  child: CustomPaint(
+                    painter: _LoupePaint(output, pixel, colors.primary),
+                    size: const Size.square(144),
+                  ),
+                ),
+                CaptureTooltipLabel(
+                  '${pixel.dx.toInt()}, ${pixel.dy.toInt()} · #$hex',
+                ),
+              ],
             ),
-            CaptureTooltipLabel(
-              '${pixel.dx.toInt()}, ${pixel.dy.toInt()} · #$hex',
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _RegionPointerHints extends StatelessWidget {
+  const _RegionPointerHints();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Drag to select an area. Click to capture this display.',
+    excludeSemantics: true,
+    child: const CaptureSurface(
+      padding: .symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        mainAxisSize: .min,
+        spacing: 12,
+        children: [_Hint('Drag', 'Select area'), _Hint('Click', 'Full screen')],
+      ),
+    ),
+  );
+}
+
+enum _LoupePart { hints, preview }
+
+/// Centers the hints above the pointer and the preview below it, swapping
+/// sides when the preview does not fit under the pointer.
+class _LoupeLayout extends MultiChildLayoutDelegate {
+  _LoupeLayout(this.pointer);
+
+  final Offset pointer;
+
+  @override
+  void performLayout(Size size) {
+    const aboveGap = 12.0;
+    // Leaves room for the cursor image, which hangs below its hotspot.
+    const belowGap = 28.0;
+    const stackGap = 8.0;
+    final hasHints = hasChild(_LoupePart.hints);
+    final hints = hasHints
+        ? layoutChild(_LoupePart.hints, BoxConstraints.loose(size))
+        : Size.zero;
+    final preview = layoutChild(_LoupePart.preview, BoxConstraints.loose(size));
+    final below = pointer.dy + belowGap + preview.height <= size.height;
+    final previewY = below
+        ? pointer.dy + belowGap
+        : pointer.dy - aboveGap - preview.height;
+    var hintsY = below
+        ? pointer.dy - aboveGap - hints.height
+        : pointer.dy + belowGap;
+    // Near an edge, stack the hints beyond the preview instead of letting
+    // them slide under the cursor.
+    if (below && hintsY < 0) {
+      hintsY = previewY + preview.height + stackGap;
+    } else if (!below && hintsY + hints.height > size.height) {
+      hintsY = previewY - stackGap - hints.height;
+    }
+    Offset at(Size child, double y) => Offset(
+      (pointer.dx - child.width / 2).clamp(
+        0.0,
+        math.max(0.0, size.width - child.width),
+      ),
+      y.clamp(0.0, math.max(0.0, size.height - child.height)),
+    );
+
+    if (hasHints) positionChild(_LoupePart.hints, at(hints, hintsY));
+    positionChild(_LoupePart.preview, at(preview, previewY));
+  }
+
+  @override
+  bool shouldRelayout(_LoupeLayout oldDelegate) =>
+      pointer != oldDelegate.pointer;
 }
 
 class _LoupePaint extends CustomPainter {
