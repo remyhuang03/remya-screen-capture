@@ -130,8 +130,22 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
       if (session.scroll != null) {
         widget.onDone();
       } else if (session.mode == .region || session.hoveredWindow != null) {
-        widget.onCapture(session.request);
+        widget.onCapture(
+          session.request(session.toolSelection ? .scanQr : .edit),
+        );
       }
+      return .handled;
+    }
+    if (const SingleActivator(
+          .keyC,
+          control: true,
+          includeRepeats: false,
+        ).accepts(event, keyboard) &&
+        _focus.hasPrimaryFocus &&
+        session.scroll == null &&
+        !session.toolSelection &&
+        (session.mode == .region || session.hoveredWindow != null)) {
+      widget.onCapture(session.request(.copy));
       return .handled;
     }
     final selection = session.selection;
@@ -410,11 +424,12 @@ class _CaptureOverlayState extends State<CaptureOverlay> {
                 _SelectionTools(
                   selection: selection,
                   pixelSize: pixelSelection!.size,
-                  edit: session.edit,
+                  tools: session.toolSelection,
                   busy: session.busy,
                   onCancel: widget.onBack,
                   onScroll: widget.onScroll,
-                  onCapture: () => widget.onCapture(session.request),
+                  onCapture: (action) =>
+                      widget.onCapture(session.request(action)),
                 ),
               ],
               if (scroll != null && panelRect != null)
@@ -543,8 +558,11 @@ class _ModeToolbar extends StatelessWidget {
                 onChanged: onChanged,
               ),
               const CaptureDivider(),
-              if (mode == .window) const _Hint('Click', 'Copy'),
-              _Hint(mode == .region ? 'RMB' : 'Right click', 'Edit'),
+              if (mode == .window) ...const [
+                _Hint('Click', 'Copy'),
+                _Hint('Enter', 'Edit'),
+              ],
+              _Hint(mode == .region ? 'RMB' : 'Right click', 'Tools'),
               const _Hint('Tab', 'Switch'),
             ],
             const _Hint('Esc', 'Cancel'),
@@ -620,7 +638,7 @@ class _SelectionTools extends StatelessWidget {
   const _SelectionTools({
     required this.selection,
     required this.pixelSize,
-    required this.edit,
+    required this.tools,
     required this.busy,
     required this.onCancel,
     required this.onScroll,
@@ -629,11 +647,11 @@ class _SelectionTools extends StatelessWidget {
 
   final Rect selection;
   final Size pixelSize;
-  final bool edit;
+  final bool tools;
   final bool busy;
   final VoidCallback onCancel;
   final VoidCallback onScroll;
-  final VoidCallback onCapture;
+  final ValueChanged<CaptureAction> onCapture;
 
   @override
   Widget build(BuildContext context) {
@@ -657,39 +675,64 @@ class _SelectionTools extends StatelessWidget {
                   crossAxisAlignment: .center,
                   spacing: 4,
                   runSpacing: 4,
-                  children: [
-                    CaptureToggleChip(
-                      label: 'Scrolling',
-                      selected: false,
-                      icon: const CaptureIcon(.scrollCapture),
-                      onChanged: busy ? null : (_) => onScroll(),
-                    ),
-                    const CaptureDivider(),
-                    CaptureButton(
-                      label: 'Cancel',
-                      variant: .text,
-                      icon: const CaptureIcon(.close),
-                      onPressed: busy ? null : onCancel,
-                    ),
-                    CaptureButton(
-                      label: edit ? 'Edit' : 'Copy',
-                      icon: CaptureIcon(edit ? .edit : .copy),
-                      onPressed: busy ? null : onCapture,
-                    ),
-                  ],
+                  children: tools
+                      ? [
+                          CaptureButton(
+                            label: 'Cancel',
+                            variant: .text,
+                            icon: const CaptureIcon(.close),
+                            onPressed: busy ? null : onCancel,
+                          ),
+                          CaptureButton(
+                            label: 'Scan QR',
+                            icon: const CaptureIcon(.qrScanner),
+                            onPressed: busy ? null : () => onCapture(.scanQr),
+                          ),
+                        ]
+                      : [
+                          CaptureToggleChip(
+                            label: 'Scrolling',
+                            selected: false,
+                            icon: const CaptureIcon(.scrollCapture),
+                            onChanged: busy ? null : (_) => onScroll(),
+                          ),
+                          const CaptureDivider(),
+                          CaptureButton(
+                            label: 'Cancel',
+                            variant: .text,
+                            icon: const CaptureIcon(.close),
+                            onPressed: busy ? null : onCancel,
+                          ),
+                          CaptureButton(
+                            label: 'Edit',
+                            variant: .tonal,
+                            icon: const CaptureIcon(.edit),
+                            onPressed: busy ? null : () => onCapture(.edit),
+                          ),
+                          CaptureButton(
+                            label: 'Copy',
+                            icon: const CaptureIcon(.copy),
+                            onPressed: busy ? null : () => onCapture(.copy),
+                          ),
+                        ],
                 ),
               ),
-              const IgnorePointer(
+              IgnorePointer(
                 child: CaptureSurface(
                   child: Wrap(
                     alignment: .end,
                     spacing: 12,
                     runSpacing: 4,
                     children: [
-                      _Hint('Enter', 'Confirm'),
-                      _Hint('Esc', 'Cancel'),
-                      _Hint('Shift', 'Keep ratio'),
-                      _Hint('←↑→↓', 'Nudge'),
+                      if (tools)
+                        const _Hint('Enter', 'Scan QR')
+                      else ...const [
+                        _Hint('Ctrl+C', 'Copy'),
+                        _Hint('Enter', 'Edit'),
+                      ],
+                      const _Hint('Esc', 'Cancel'),
+                      const _Hint('Shift', 'Keep ratio'),
+                      const _Hint('←↑→↓', 'Nudge'),
                     ],
                   ),
                 ),
@@ -727,7 +770,7 @@ class _SelectionToolsLayout extends MultiChildLayoutDelegate {
     final actions = layoutChild(
       _SelectionPart.actions,
       BoxConstraints(
-        maxWidth: math.min(450, available.width),
+        maxWidth: math.min(520, available.width),
         maxHeight: available.height,
       ),
     );

@@ -49,10 +49,13 @@ class FrozenOutput {
   }
 }
 
+/// What a confirmed capture does with its pixels.
+enum CaptureAction { copy, edit, scanQr }
+
 typedef CaptureRequest = ({
   FrozenOutput output,
   Rect rect,
-  bool edit,
+  CaptureAction action,
   CaptureWindow? window,
 });
 
@@ -88,7 +91,7 @@ class CaptureSession extends ChangeNotifier {
   ColorFormat colorFormat = .hex;
   int zoom = 12;
   CaptureWindow? hoveredWindow;
-  bool edit = false;
+  bool _tools = false;
   bool busy = false;
   String? message;
   ScrollPreview? scroll;
@@ -101,6 +104,10 @@ class CaptureSession extends ChangeNotifier {
   Offset? _toolbarGrab;
 
   Rect? get selection => _selection;
+
+  /// Whether the selection came from a secondary-button drag and offers
+  /// tools instead of copy and edit.
+  bool get toolSelection => _tools && _selection != null;
   bool get dragging => _drag != null || toolbarDragSource != null;
   FrozenOutput? get confinedOutput =>
       _drag?.confine == true ? _drag?.output : null;
@@ -237,14 +244,14 @@ class CaptureSession extends ChangeNotifier {
     FrozenOutput output,
     Offset position,
     Size viewport,
-    bool edit, {
+    bool tools, {
     bool confinePointer = false,
   }) {
     if (busy || dragging || selection != null || scroll != null) return false;
     final local = _outputPoint(output, position, viewport);
     _hover = (output: output, position: local);
     _updatePointer(output, local);
-    this.edit = edit;
+    _tools = tools;
     _drag = (
       output: output,
       start: output.monitor.bounds.topLeft + local,
@@ -293,7 +300,7 @@ class CaptureSession extends ChangeNotifier {
     if (drag.output.monitor.bounds.contains(global) &&
         (global - drag.start).distance < 4 &&
         (mode != .window || hoveredWindow != null)) {
-      return request;
+      return request(_tools ? .scanQr : .copy);
     }
     return null;
   }
@@ -341,10 +348,10 @@ class CaptureSession extends ChangeNotifier {
     point.dy >= size.height - 1 ? size.height : point.dy,
   );
 
-  CaptureRequest get request => (
+  CaptureRequest request(CaptureAction action) => (
     output: active,
     rect: selection ?? Offset.zero & active.size,
-    edit: edit,
+    action: action,
     window: mode == .window ? hoveredWindow : null,
   );
 

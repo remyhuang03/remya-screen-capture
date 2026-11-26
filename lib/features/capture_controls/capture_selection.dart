@@ -189,20 +189,30 @@ class _Nudge extends Intent {
   final Offset delta;
 }
 
-enum _Handle {
-  topLeft(Alignment.topLeft, SystemMouseCursors.resizeUpLeftDownRight),
-  topRight(Alignment.topRight, SystemMouseCursors.resizeUpRightDownLeft),
-  bottomLeft(Alignment.bottomLeft, SystemMouseCursors.resizeUpRightDownLeft),
-  bottomRight(Alignment.bottomRight, SystemMouseCursors.resizeUpLeftDownRight),
-  top(Alignment.topCenter, SystemMouseCursors.resizeUpDown),
-  bottom(Alignment.bottomCenter, SystemMouseCursors.resizeUpDown),
-  left(Alignment.centerLeft, SystemMouseCursors.resizeLeftRight),
-  right(Alignment.centerRight, SystemMouseCursors.resizeLeftRight);
+/// Resize cursor for a selection handle at [handle]; shared with the image
+/// editor so both selection UIs point the same way.
+MouseCursor selectionResizeCursor(Alignment handle) => handle.x == 0
+    ? SystemMouseCursors.resizeUpDown
+    : handle.y == 0
+    ? SystemMouseCursors.resizeLeftRight
+    : handle.x == handle.y
+    ? SystemMouseCursors.resizeUpLeftDownRight
+    : SystemMouseCursors.resizeUpRightDownLeft;
 
-  const _Handle(this.alignment, this.cursor);
+enum _Handle {
+  topLeft(Alignment.topLeft),
+  topRight(Alignment.topRight),
+  bottomLeft(Alignment.bottomLeft),
+  bottomRight(Alignment.bottomRight),
+  top(Alignment.topCenter),
+  bottom(Alignment.bottomCenter),
+  left(Alignment.centerLeft),
+  right(Alignment.centerRight);
+
+  const _Handle(this.alignment);
 
   final Alignment alignment;
-  final MouseCursor cursor;
+  MouseCursor get cursor => selectionResizeCursor(alignment);
 }
 
 class _HandleMark extends StatelessWidget {

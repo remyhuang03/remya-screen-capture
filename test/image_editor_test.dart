@@ -428,7 +428,12 @@ void main() {
     expect(activeCursor(), SystemMouseCursors.grab);
     await mouse.moveTo(corner);
     await tester.pump();
-    expect(activeCursor(), SystemMouseCursors.basic);
+    expect(activeCursor(), SystemMouseCursors.resizeUpLeftDownRight);
+    await mouse.down(corner);
+    await tester.pump();
+    expect(activeCursor(), SystemMouseCursors.resizeUpLeftDownRight);
+    await mouse.up();
+    await tester.pump();
     await mouse.moveTo(_sourceOrigin + const Offset(145, 60));
     await tester.pump();
     expect(activeCursor(), SystemMouseCursors.precise);

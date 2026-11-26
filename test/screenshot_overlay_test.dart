@@ -197,7 +197,7 @@ void main() {
   );
 
   testWidgets(
-    'primary click captures the output and secondary drag edits a pixel crop',
+    'primary click copies, selections offer copy and edit, secondary drag offers tools',
     (tester) async {
       tester.view.physicalSize = const Size(960, 700);
       tester.view.devicePixelRatio = 1;
@@ -290,7 +290,7 @@ void main() {
       await tester.tapAt(const Offset(510, 330));
       await tester.pump();
       expect(requests.single.rect, const Rect.fromLTWH(0, 0, 1440, 1050));
-      expect(requests.single.edit, isFalse);
+      expect(requests.single.action, CaptureAction.copy);
 
       final mouse = await tester.startGesture(
         const Offset(240, 200),
@@ -308,6 +308,27 @@ void main() {
       expect(session.confinedOutput, isNull);
       expect(tester.getCenter(toolbarHint), before + const Offset(0, 48));
 
+      final primary = await tester.startGesture(
+        const Offset(240, 200),
+        kind: PointerDeviceKind.mouse,
+      );
+      await primary.moveTo(const Offset(440, 360));
+      await primary.up();
+      await tester.pump();
+      expect(session.toolSelection, isFalse);
+      expect(find.text('Copy'), findsNWidgets(2));
+      expect(find.text('Edit'), findsNWidgets(2));
+      expect(find.text('Scan QR'), findsNothing);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(requests.last.action, CaptureAction.copy);
+      expect(requests.last.rect, const Rect.fromLTRB(360, 300, 660, 540));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(requests.last.action, CaptureAction.edit);
+      session.clearSelection();
+      await tester.pump();
+
       final selection = await tester.startGesture(
         const Offset(240, 200),
         kind: PointerDeviceKind.mouse,
@@ -317,12 +338,19 @@ void main() {
       await selection.up();
       await tester.pump();
       expect(session.confinedOutput, isNull);
-      expect(find.text('Edit'), findsOneWidget);
+      expect(session.toolSelection, isTrue);
+      expect(find.text('Scan QR'), findsNWidgets(2));
+      expect(find.text('Copy'), findsNothing);
       expect(session.selection, const Rect.fromLTRB(360, 300, 660, 540));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      final count = requests.length;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(requests, hasLength(count));
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       expect(requests.last.rect, const Rect.fromLTRB(361, 300, 661, 540));
-      expect(requests.last.edit, isTrue);
+      expect(requests.last.action, CaptureAction.scanQr);
 
       final hintSurface = find.ancestor(
         of: find.text('Keep ratio'),
@@ -517,9 +545,9 @@ void main() {
     expect(session.draft, const Rect.fromLTRB(900, 100, 960, 231));
     expect(session.endDrag(left, const Offset(1036, 231), viewport), isNull);
     expect(session.confinedOutput, isNull);
-    expect(session.request.output, left);
+    expect(session.request(CaptureAction.copy).output, left);
     expect(session.selection, const Rect.fromLTRB(1350, 150, 1440, 347));
-    expect(session.request.edit, isTrue);
+    expect(session.toolSelection, isTrue);
     session.clearSelection();
 
     session.startDrag(left, const Offset(950, 140), viewport, false);

@@ -33,6 +33,13 @@ Future<Uint8List> cropPng({
 Future<void> copyPng({required List<int> png}) =>
     ScreenshotRustLib.instance.api.crateApiCopyPng(png: png);
 
+Future<void> copyText({required String text}) =>
+    ScreenshotRustLib.instance.api.crateApiCopyText(text: text);
+
+/// Text of every readable QR code in the PNG; empty when none is found.
+Future<List<String>> scanQr({required List<int> png}) =>
+    ScreenshotRustLib.instance.api.crateApiScanQr(png: png);
+
 Future<String> savePng({
   required List<int> png,
   required String path,

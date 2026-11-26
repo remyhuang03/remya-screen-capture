@@ -80,6 +80,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 - **あらゆる撮影シーンに対応**：ウィンドウ撮影、カスタム領域選択、および `zwlr_virtual_pointer_v1` プロトコルによる自動縦スクロール撮影に対応。
 - **精密な範囲選択**：マウスドラッグとキーボードによるピクセル単位の微調整が可能。
+- **選択範囲の操作とツール**：左ボタンでドラッグして範囲を選択し、Ctrl+C でコピーするか、Enter でエディターを開きます。右ボタンでドラッグするとツールを使えます。QR コードをスキャンすると、読み取ったテキストがコピーされ、リンクを開くことができます。
 - **内蔵エディタ**：豊富な描画・注釈ツールを搭載。
 
 ### 画面録画
@@ -111,7 +112,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **構成**：
   - `lib/main.dart` / `lib/app.dart`: 起動処理とテーマ。
   - `lib/features/`: スクリーンショット UI、画像エディタ、再利用可能なキャプチャコントロール。
-  - `lib/src/rust/capture/`: Wayland キャプチャコマンド、PNG 処理、自動スクロールキャプチャ（`wayland-client` および `wayland-protocols-wlr` を使用）。Rust 依存ライブラリのライセンスはサードパーティ表記を参照してください。
+  - `lib/src/rust/capture/`: Wayland キャプチャコマンド、PNG 処理、QR コードのデコード、自動スクロールキャプチャ（`wayland-client`、`wayland-protocols-wlr`、`rqrr` を使用）。Rust 依存ライブラリのライセンスはサードパーティ表記を参照してください。
   - `linux/`: Linux GTK ランナーおよびデスクトップパッケージング。
   - `assets/icons/`: アプリアイコン。
   - `tool/install.py`: XDG インストール補助スクリプト。

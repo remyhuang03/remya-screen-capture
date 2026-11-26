@@ -80,6 +80,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 - **Aufnahme für jedes Szenario**: Unterstützt Fensteraufnahmen, benutzerdefinierte Bereiche sowie automatische vertikale Scroll-Screenshots (per `zwlr_virtual_pointer_v1`-Protokoll).
 - **Präzise Auswahl**: Bereichsauswahl per Maus und pixelgenaue Feinjustierung per Tastatur.
+- **Auswahlaktionen und Werkzeuge**: Ziehe mit der linken Maustaste einen Bereich auf und kopiere ihn (Strg+C) oder öffne ihn im Editor (Eingabetaste). Ziehe mit der rechten Maustaste, um die Werkzeuge zu nutzen. Der QR-Scan kopiert den dekodierten Text und bietet an, Links zu öffnen.
 - **Integrierter Editor**: Umfangreiche Zeichen- und Anmerkungswerkzeuge.
 
 ### Bildschirmaufnahme
@@ -111,7 +112,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Struktur**:
   - `lib/main.dart` und `lib/app.dart`: Startvorgang und Design.
   - `lib/features/`: Screenshot-Oberfläche, Bildeditor und wiederverwendbare Aufnahmesteuerungen.
-  - `lib/src/rust/capture/`: Wayland-Aufnahmebefehle, PNG-Verarbeitung und Auto-Scroll-Aufnahme (mit `wayland-client` und `wayland-protocols-wlr`). Lizenzen der Rust-Abhängigkeiten finden sich in den Drittanbieterhinweisen.
+  - `lib/src/rust/capture/`: Wayland-Aufnahmebefehle, PNG-Verarbeitung, QR-Code-Dekodierung und Auto-Scroll-Aufnahme (mit `wayland-client`, `wayland-protocols-wlr` und `rqrr`). Lizenzen der Rust-Abhängigkeiten finden sich in den Drittanbieterhinweisen.
   - `linux/`: Linux-GTK-Runner und Desktop-Paketierung.
   - `assets/icons/`: Anwendungssymbol.
   - `tool/install.py`: XDG-Installationshelfer.

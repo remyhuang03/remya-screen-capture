@@ -80,6 +80,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 - **Full-scenario capture**: Supports window capture, custom region selection, and automatic vertical scrolling capture (powered by `zwlr_virtual_pointer_v1` auto-scrolling and stitching).
 - **Precision selection**: Mouse drag and keyboard pixel-level adjustments.
+- **Selection actions and tools**: Left-drag a region, then copy it (Ctrl+C) or open it in the editor (Enter). Right-drag a region to use tools instead; Scan QR copies the decoded text and offers to open links.
 - **Built-in editor**: Rich drawing and annotation tools.
 
 ### Screen Recording
@@ -111,7 +112,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Structure**:
   - `lib/main.dart` and `lib/app.dart`: Startup and theme.
   - `lib/features/`: Screenshot UI, image editor, and reusable capture controls.
-  - `lib/src/rust/capture/`: Wayland capture commands, PNG processing, and auto-scroll capture (using `wayland-client` and `wayland-protocols-wlr`). See its third-party notices for Rust dependency licenses.
+  - `lib/src/rust/capture/`: Wayland capture commands, PNG processing, QR code decoding, and auto-scroll capture (using `wayland-client`, `wayland-protocols-wlr`, and `rqrr`). See its third-party notices for Rust dependency licenses.
   - `linux/`: Linux GTK runner and desktop packaging.
   - `assets/icons/`: Application icon.
   - `tool/install.py`: XDG installation helper.

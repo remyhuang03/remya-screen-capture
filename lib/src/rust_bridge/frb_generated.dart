@@ -73,7 +73,7 @@ class ScreenshotRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1988455285;
+  int get rustContentHash => 1065884736;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -105,6 +105,8 @@ abstract class ScreenshotRustLibApi extends BaseApi {
 
   Future<void> crateApiCopyPng({required List<int> png});
 
+  Future<void> crateApiCopyText({required String text});
+
   Future<Uint8List> crateApiCropPng({
     required List<int> png,
     required int x,
@@ -119,6 +121,8 @@ abstract class ScreenshotRustLibApi extends BaseApi {
     required bool replace,
     required bool unique,
   });
+
+  Future<List<String>> crateApiScanQr({required List<int> png});
 
   Future<StartupCapture?> crateApiTakeStartupCapture();
 
@@ -367,6 +371,34 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
       const TaskConstMeta(debugName: "copy_png", argNames: ["png"]);
 
   @override
+  Future<void> crateApiCopyText({required String text}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(text, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCopyTextConstMeta,
+        argValues: [text],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCopyTextConstMeta =>
+      const TaskConstMeta(debugName: "copy_text", argNames: ["text"]);
+
+  @override
   Future<Uint8List> crateApiCropPng({
     required List<int> png,
     required int x,
@@ -386,7 +418,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -424,7 +456,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -445,6 +477,34 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   );
 
   @override
+  Future<List<String>> crateApiScanQr({required List<int> png}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(png, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiScanQrConstMeta,
+        argValues: [png],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiScanQrConstMeta =>
+      const TaskConstMeta(debugName: "scan_qr", argNames: ["png"]);
+
+  @override
   Future<StartupCapture?> crateApiTakeStartupCapture() {
     return handler.executeNormal(
       NormalTask(
@@ -453,7 +513,7 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 12,
             port: port_,
           );
         },
@@ -534,6 +594,12 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
   }
 
   @protected
@@ -699,6 +765,18 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -885,6 +963,15 @@ class ScreenshotRustLibApiImpl extends ScreenshotRustLibApiImplPlatform
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
   }
 
   @protected
