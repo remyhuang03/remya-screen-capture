@@ -66,7 +66,7 @@ pub(crate) fn crop(image: &RgbaImage, [x, y, width, height]: [u32; 4]) -> Result
     Ok(image.view(x, y, width, height).to_image())
 }
 
-fn decode(bytes: &[u8], format: ImageFormat) -> Result<RgbaImage> {
+pub(crate) fn decode(bytes: &[u8], format: ImageFormat) -> Result<RgbaImage> {
     let image = ImageReader::with_format(Cursor::new(bytes), format)
         .decode()
         .context("Could not decode the captured image")?;

@@ -10,11 +10,22 @@ use crate::capture::check_png;
 
 pub(crate) fn copy_png(png: &[u8]) -> Result<()> {
     check_png(png)?;
+    copy(png, "image/png")
+}
+
+pub(crate) fn copy_text(text: &str) -> Result<()> {
+    ensure!(!text.is_empty(), "There is no text to copy");
+    copy(text.as_bytes(), "text/plain;charset=utf-8")
+}
+
+fn copy(data: &[u8], mime: &str) -> Result<()> {
     let mut command = Command::new("wl-copy");
-    command.args(["--type", "image/png"]);
-    let result = crate::process::send(command, png, Duration::from_secs(3)).map_err(|error| {
+    command.args(["--type", mime]);
+    let result = crate::process::send(command, data, Duration::from_secs(3)).map_err(|error| {
         if error.kind() == ErrorKind::NotFound {
-            anyhow::anyhow!("Could not launch wl-copy. Install wl-clipboard to copy screenshots")
+            anyhow::anyhow!(
+                "Could not launch wl-copy. Install wl-clipboard to copy to the clipboard"
+            )
         } else {
             anyhow::anyhow!("Could not copy to the Wayland clipboard: {error}")
         }

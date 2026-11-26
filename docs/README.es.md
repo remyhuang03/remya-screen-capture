@@ -80,6 +80,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 - **Captura para cualquier escenario**: Admite captura de ventanas, regiones personalizadas y desplazamiento vertical automático (mediante el protocolo `zwlr_virtual_pointer_v1`).
 - **Selección de precisión**: Arrastrar con el ratón y ajuste píxel a píxel con el teclado.
+- **Acciones y herramientas de selección**: Arrastra con el botón izquierdo para seleccionar una región y luego cópiala (Ctrl+C) o ábrela en el editor (Intro). Arrastra con el botón derecho para usar las herramientas. Al escanear un código QR, se copia el texto decodificado y se ofrece abrir los enlaces.
 - **Editor integrado**: Amplia variedad de herramientas de dibujo y anotación.
 
 ### Grabación de pantalla
@@ -111,7 +112,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **Estructura**:
   - `lib/main.dart` y `lib/app.dart`: inicio y tema.
   - `lib/features/`: interfaz de captura, editor de imágenes y controles reutilizables.
-  - `lib/src/rust/capture/`: comandos de captura Wayland, procesamiento PNG y captura con desplazamiento automático (con `wayland-client` y `wayland-protocols-wlr`). Consulta sus avisos de terceros para las licencias de dependencias Rust.
+  - `lib/src/rust/capture/`: comandos de captura Wayland, procesamiento PNG, decodificación de códigos QR y captura con desplazamiento automático (con `wayland-client`, `wayland-protocols-wlr` y `rqrr`). Consulta sus avisos de terceros para las licencias de dependencias Rust.
   - `linux/`: ejecutor GTK para Linux y empaquetado de escritorio.
   - `assets/icons/`: icono de la aplicación.
   - `tool/install.py`: asistente de instalación XDG.

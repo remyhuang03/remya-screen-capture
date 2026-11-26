@@ -80,6 +80,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 - **全场景捕获**：支持窗口截图、自定义区域截图以及自动垂直滚动长截图（基于 `zwlr_virtual_pointer_v1` 协议自动滚动并拼接）。
 - **精细化选区**：支持鼠标拖拽与键盘像素级微调。
+- **选区操作与工具**：按住鼠标左键拖出选区，然后按 Ctrl+C 复制或按 Enter 在编辑器中打开。按住鼠标右键拖出选区可使用工具。扫描二维码会复制解码后的文本，并提供打开链接的选项。
 - **内置编辑器**：提供丰富的绘图与标注工具。
 
 ### 屏幕录制
@@ -111,7 +112,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **目录结构**：
   - `lib/main.dart` 与 `lib/app.dart`：应用启动与主题配置。
   - `lib/features/`：截图 UI、图像编辑器及可复用采集控件。
-  - `lib/src/rust/capture/`：Wayland 采集命令、PNG 处理与自动滚动捕获（新增 `wayland-client` 与 `wayland-protocols-wlr` 依赖）。Rust 依赖许可请参见其中的第三方声明。
+  - `lib/src/rust/capture/`：Wayland 采集命令、PNG 处理、二维码解码与自动滚动捕获（使用 `wayland-client`、`wayland-protocols-wlr` 和 `rqrr`）。Rust 依赖许可请参见其中的第三方声明。
   - `linux/`：Linux GTK 运行器与桌面打包配置。
   - `assets/icons/`：应用图标。
   - `tool/install.py`：XDG 安装辅助脚本。

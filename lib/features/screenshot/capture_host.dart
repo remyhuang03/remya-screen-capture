@@ -25,6 +25,7 @@ import 'capture_geometry.dart';
 import 'capture_overlay.dart';
 import 'capture_result.dart';
 import 'capture_session.dart';
+import 'qr_result.dart';
 
 class CaptureHost extends StatefulWidget {
   const CaptureHost({super.key, this.initialMode = .region, this.onFinished});
@@ -568,7 +569,12 @@ return "pending"
           height: rect.height.toInt(),
         );
       }
-      if (_current(revision)) await _deliver(png, request);
+      if (!_current(revision)) return;
+      if (request.action == .scanQr) {
+        await _scanQr(png, request, session, revision);
+      } else {
+        await _deliver(png, request);
+      }
     } catch (error) {
       if (_current(revision) && _session == session) {
         session.setBusy(false, error: _windowError(request, error));
@@ -745,7 +751,7 @@ return "pending"
       // Stop after the scroll step in flight, keeping what it stitched.
       await run.loop;
       final png = await capture.finish();
-      if (_current(revision)) await _deliver(png, session.request);
+      if (_current(revision)) await _deliver(png, session.request(.copy));
     } catch (error) {
       if (!_current(revision)) return;
       if (_session == session && session.scroll != null) {
@@ -897,7 +903,7 @@ return "pending"
     }
     _resultImage = image;
     final name = _screenshotName(DateTime.now());
-    if (request.edit) {
+    if (request.action == .edit) {
       await _showEditor(image, name);
       await _releaseCaptureLock();
     } else {
@@ -906,6 +912,49 @@ return "pending"
         await _showResult(png, image, request.output.monitor, name, receipt);
       }
     }
+  }
+
+  Future<void> _scanQr(
+    Uint8List png,
+    CaptureRequest request,
+    CaptureSession session,
+    int revision,
+  ) async {
+    final texts = await rust.scanQr(png: png);
+    if (!_current(revision)) return;
+    if (texts.isEmpty) {
+      session.setBusy(false, error: 'No QR code found');
+      return;
+    }
+    await _endCapture();
+    if (!_current(revision)) return;
+    String? copyError;
+    try {
+      await rust.copyText(text: texts.join('\n'));
+    } catch (error) {
+      copyError = _message(error);
+    }
+    if (!_current(revision)) return;
+    await _showResultView(
+      request.output.monitor,
+      66,
+      QrResult(
+        texts: texts,
+        copyError: copyError,
+        onOpen: (link) => unawaited(_openLink(link)),
+        onClose: () => unawaited(_quit()),
+      ),
+    );
+  }
+
+  Future<void> _openLink(Uri link) async {
+    try {
+      await Process.start('xdg-open', [link.toString()], mode: .detached);
+    } catch (error) {
+      await _showError('Could not open the link. ${_message(error)}');
+      return;
+    }
+    await _quit();
   }
 
   Future<CaptureReceipt> _copyAndSave(
@@ -950,12 +999,29 @@ return "pending"
     CaptureMonitor output,
     String name,
     CaptureReceipt receipt,
+  ) => _showResultView(
+    output,
+    receipt.copied && receipt.path != null ? 66.0 : 118.0,
+    CaptureResult(
+      image: image,
+      receipt: receipt,
+      onRetry: (previous) => _copyAndSave(png, name, previous),
+      onEdit: () => unawaited(_editResult(image, name)),
+      onClose: () {
+        if (!_resultOpeningEditor) unawaited(_quit());
+      },
+    ),
+  );
+
+  Future<void> _showResultView(
+    CaptureMonitor output,
+    double height,
+    Widget child,
   ) async {
     final id = await openCaptureWindow('result', output: output.name);
     _resultView = id;
     final size = output.bounds.size;
     final width = math.min(590.0, size.width - 16);
-    final height = receipt.copied && receipt.path != null ? 66.0 : 118.0;
     final box = Rect.fromLTWH(
       (size.width - width) / 2,
       math.max(8.0, size.height - height - 56),
@@ -965,25 +1031,14 @@ return "pending"
     _setView(
       id,
       LayoutBuilder(
-        builder: (context, constraints) {
-          final rect = scaleRect(box, size, constraints.biggest);
-          return Stack(
-            children: [
-              Positioned.fromRect(
-                rect: rect,
-                child: CaptureResult(
-                  image: image,
-                  receipt: receipt,
-                  onRetry: (previous) => _copyAndSave(png, name, previous),
-                  onEdit: () => unawaited(_editResult(image, name)),
-                  onClose: () {
-                    if (!_resultOpeningEditor) unawaited(_quit());
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+        builder: (context, constraints) => Stack(
+          children: [
+            Positioned.fromRect(
+              rect: scaleRect(box, size, constraints.biggest),
+              child: child,
+            ),
+          ],
+        ),
       ),
     );
     await setCaptureInput(id, [box], 'onDemand');

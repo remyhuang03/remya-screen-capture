@@ -80,6 +80,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 
 - **全場景擷取**：支援視窗截圖、自訂區域截圖以及自動垂直捲動長截圖（基於 `zwlr_virtual_pointer_v1` 協定自動捲動並拼接）。
 - **精細化選區**：支援滑鼠拖曳與鍵盤像素級微調。
+- **選區操作與工具**：按住滑鼠左鍵拖曳選取範圍，再按 Ctrl+C 複製或按 Enter 在編輯器中開啟。按住滑鼠右鍵拖曳選取範圍即可使用工具。掃描 QR 碼會複製解碼後的文字，並提供開啟連結的選項。
 - **內建編輯器**：提供豐富的繪圖與標註工具。
 
 ### 螢幕錄製
@@ -111,7 +112,7 @@ hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("remya_screen_capture --color-picke
 - **目錄結構**：
   - `lib/main.dart` 與 `lib/app.dart`：應用程式啟動與主題設定。
   - `lib/features/`：截圖 UI、影像編輯器及可重複使用的擷取控制項。
-  - `lib/src/rust/capture/`：Wayland 擷取命令、PNG 處理與自動捲動擷取（新增 `wayland-client` 與 `wayland-protocols-wlr` 相依套件）。Rust 相依套件授權請參閱其中的第三方聲明。
+  - `lib/src/rust/capture/`：Wayland 擷取命令、PNG 處理、QR 碼解碼與自動捲動擷取（使用 `wayland-client`、`wayland-protocols-wlr` 和 `rqrr`）。Rust 相依套件授權請參閱其中的第三方聲明。
   - `linux/`：Linux GTK 執行器與桌面打包設定。
   - `assets/icons/`：應用程式圖示。
   - `tool/install.py`：XDG 安裝輔助腳本。

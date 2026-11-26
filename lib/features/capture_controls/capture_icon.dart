@@ -12,6 +12,8 @@ enum CaptureSymbol {
   close(Symbols.close_rounded),
   copy(Symbols.content_copy_rounded),
   edit(Symbols.edit_rounded),
+  qrScanner(Symbols.qr_code_scanner_rounded),
+  openInNew(Symbols.open_in_new_rounded),
   mic(Symbols.mic_rounded),
   micOff(Symbols.mic_off_rounded),
   volumeUp(Symbols.volume_up_rounded),

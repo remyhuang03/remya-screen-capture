@@ -2,7 +2,7 @@ use anyhow::Result;
 use flutter_rust_bridge::frb;
 use std::sync::Mutex;
 
-use crate::{capture, files, scroll::ScrollSession};
+use crate::{capture, files, qr, scroll::ScrollSession};
 
 pub fn capture_output(name: String) -> Result<Vec<u8>> {
     capture::output_png(&name)
@@ -18,6 +18,15 @@ pub fn crop_png(png: Vec<u8>, x: u32, y: u32, width: u32, height: u32) -> Result
 
 pub fn copy_png(png: Vec<u8>) -> Result<()> {
     files::copy_png(&png)
+}
+
+pub fn copy_text(text: String) -> Result<()> {
+    files::copy_text(&text)
+}
+
+/// Text of every readable QR code in the PNG; empty when none is found.
+pub fn scan_qr(png: Vec<u8>) -> Result<Vec<String>> {
+    qr::scan_png(&png)
 }
 
 pub fn save_png(png: Vec<u8>, path: String, replace: bool, unique: bool) -> Result<String> {
