@@ -523,14 +523,14 @@ packages:
       path: "../remya-core/packages/remya_client"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.3.0"
   remya_ui:
     dependency: "direct main"
     description:
       path: "../remya-core/packages/remya_ui"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.3.0"
   safe_local_storage:
     dependency: transitive
     description:
