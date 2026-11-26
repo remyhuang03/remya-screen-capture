@@ -860,11 +860,13 @@ return "pending"
     _stopScroll();
     session?.removeListener(_syncOverlayInput);
     if (mounted && ids.isNotEmpty) setState(() => ids.forEach(_widgets.remove));
-    for (final id in ids) {
-      await changeCaptureWindow('hide', id);
-      await changeCaptureWindow('close', id);
+    try {
+      for (final id in ids) {
+        await changeCaptureWindow('close', id);
+      }
+    } finally {
+      _releaseSession(session);
     }
-    _releaseSession(session);
   }
 
   void _disposeSession() {
@@ -1173,9 +1175,14 @@ return "pending"
       debugPrint(_message(error));
     }
     if (widget.onFinished case final finish?) {
-      await _endCapture();
-      await _releaseCaptureLock();
-      await finish();
+      try {
+        await _endCapture();
+      } catch (error) {
+        debugPrint('Closing screenshot overlays: ${_message(error)}');
+      } finally {
+        await _releaseCaptureLock();
+        await finish();
+      }
     } else {
       await captureWindows.invokeMethod<void>('quit');
     }
