@@ -1,7 +1,7 @@
 Rust backend third-party notices
 
 Locked Linux dependencies
-Cargo.lock SHA-256: cfd0d98f0d7a8a171940455496fe560f43229b55a089749ef14acb3ff6e01940
+Cargo.lock SHA-256: 027dea94f49121e8a4eef06e195e8aa932f9a43d50e43863909c7ad5045aec93
 
 ========================================================================
 addr2line 0.27.1
