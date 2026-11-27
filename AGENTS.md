@@ -21,6 +21,9 @@
 - Keep color history as app-owned XDG state. Provide a desktop `settings` action for Core OpenApp routing.
 - Respect `XDG_PICTURES_DIR` in addition to standard XDG base directories.
 
+## Coding & UI
+- Build settings controls from `remya_ui` as specified in Core's `docs/settings-controls.md` (choices, `SettingsButton` variants, sliders, number fields, metrics). Do not use Material `SegmentedButton`, dropdowns or `OutlinedButton` in settings rows.
+
 ## Validation
 - Regenerate Rust API bindings with `flutter_rust_bridge_codegen` 2.13.0 using `flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml`. Normalize the output with `cargo fmt --all` and `fvm dart format lib/src/rust_bridge` before reviewing the binding diff. Bundle third-party notices when adding Rust dependencies.
 

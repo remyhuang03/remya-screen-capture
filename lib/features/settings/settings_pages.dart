@@ -122,7 +122,7 @@ class ColorPickerSettingsPage extends StatelessWidget {
             ),
             _Row(
               title: 'Default copy format',
-              trailing: SettingsDropdown<ColorFormat>(
+              trailing: SettingsChoice<ColorFormat>(
                 label: 'Default copy format',
                 choices: {for (final format in enabled) format: format.label},
                 selected: preferences.defaultFormat,
@@ -148,8 +148,15 @@ class ColorPickerSettingsPage extends StatelessWidget {
         SettingsGroup(
           title: 'History',
           children: [
-            _HistorySize(
+            SettingsSliderTile(
+              title: 'History size',
+              detail: preferences.historySize == 0
+                  ? 'Picked colors are not kept'
+                  : 'Keep the last ${preferences.historySize} colors',
               value: preferences.historySize,
+              min: 0,
+              max: 128,
+              suffix: '',
               onChanged: write == null
                   ? null
                   : (value) => write(change(historySize: value)),
@@ -241,54 +248,6 @@ class _Switch extends StatelessWidget {
     label: SettingLabel(title, description: subtitle),
     control: Switch(value: value, onChanged: onChanged),
   );
-}
-
-/// Keeps the dragged value locally and saves once the drag ends.
-class _HistorySize extends StatefulWidget {
-  const _HistorySize({required this.value, required this.onChanged});
-
-  final int value;
-  final ValueChanged<int>? onChanged;
-
-  @override
-  State<_HistorySize> createState() => _HistorySizeState();
-}
-
-class _HistorySizeState extends State<_HistorySize> {
-  int? _dragging;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = _dragging ?? widget.value;
-    return SettingRow(
-      id: 'history-size',
-      label: SettingLabel(
-        'History size',
-        description: value == 0
-            ? 'Picked colors are not kept'
-            : 'Keep the last $value colors',
-      ),
-      control: SizedBox(
-        width: 240,
-        child: Slider(
-          value: value.toDouble(),
-          max: 128,
-          divisions: 128,
-          label: '$value',
-          semanticFormatterCallback: (value) => '${value.round()} colors',
-          onChanged: widget.onChanged == null
-              ? null
-              : (value) => setState(() => _dragging = value.round()),
-          onChangeEnd: (value) {
-            setState(() => _dragging = null);
-            if (value.round() != widget.value) {
-              widget.onChanged?.call(value.round());
-            }
-          },
-        ),
-      ),
-    );
-  }
 }
 
 class _FormatRow extends StatelessWidget {
