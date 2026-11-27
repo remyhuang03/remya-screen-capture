@@ -480,8 +480,7 @@ class CaptureWindows {
       gdk_display_sync(display_);
       success(call);
     } else if (g_str_equal(method, "close")) {
-      // shortcut: retain hidden views until shutdown, destroy them sooner
-      // when Flutter's GTK view disposal can safely overlap raster work.
+      // Keep the view alive while Flutter finishes rasterizing the closing frame.
       const bool was_mapped = gtk_widget_get_mapped(window.window);
       window.deactivate();
       if (was_mapped) gdk_display_sync(display_);
@@ -561,6 +560,11 @@ class CaptureWindows {
     for (auto& entry : windows_) {
       auto& state = *entry.second;
       if (state.active || state.role != role) continue;
+      if (overlay && resident_) {
+        // A remapped FlView can display the last selection until the mouse moves.
+        gtk_widget_destroy(state.window);
+        break;
+      }
       state.active = true;
       if (monitor != nullptr) {
         gtk_layer_set_monitor(GTK_WINDOW(state.window), monitor);
