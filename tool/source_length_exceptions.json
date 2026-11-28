@@ -1,7 +1,7 @@
 {
   "lib/features/screenshot/capture_host.dart": {
     "reason": "The screenshot host coordinates the session and owns the native windows and their cleanup across asynchronous capture transitions.",
-    "sha256": "f639720057ed50de822b63c08afd501779d18565aa58dfa7ba96867f813cc271"
+    "sha256": "6e55994a52013a12d1d078351e4bc836ca6638b005a72f5b8f5e627a404519b8"
   },
   "lib/features/screenshot/capture_overlay.dart": {
     "reason": "The overlay and its private widgets share one layout and pointer coordinate system for drawing and editing the screenshot selection.",

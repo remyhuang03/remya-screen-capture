@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -368,49 +367,6 @@ class ColorPickerStore {
     });
     _pendingHistory = pending.then<void>((_) {}, onError: (Object _) {});
     return pending;
-  }
-
-  Future<void> copy(String text) async {
-    final Process process;
-    try {
-      process = await Process.start('wl-copy', [
-        '--type',
-        'text/plain;charset=utf-8',
-      ]);
-    } on ProcessException {
-      throw StateError(
-        'Could not start wl-copy. Install wl-clipboard to copy colors.',
-      );
-    }
-    final stdout = process.stdout.listen((_) {});
-    final errors = StringBuffer();
-    final stderr = process.stderr
-        .transform(const Utf8Decoder(allowMalformed: true))
-        .listen(errors.write);
-    var exited = false;
-    final exit = process.exitCode.then((status) {
-      exited = true;
-      return status;
-    });
-    try {
-      final status = await (() async {
-        process.stdin.write(text);
-        await process.stdin.close();
-        return exit;
-      })().timeout(const Duration(seconds: 3));
-      if (status != 0) {
-        throw StateError(
-          'Could not copy the color (wl-copy exited with $status). ${errors.toString().trim()}',
-        );
-      }
-    } on TimeoutException {
-      throw StateError('Timed out copying the color to the Wayland clipboard.');
-    } finally {
-      if (!exited) process.kill(.sigkill);
-      await stdout.cancel();
-      // The background clipboard owner can keep stderr open after its parent exits.
-      await stderr.cancel();
-    }
   }
 }
 

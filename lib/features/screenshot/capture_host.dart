@@ -63,7 +63,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   ui.Image? _resultImage;
   String? _editorPath;
   int _revision = 0;
-  bool _initializing = false;
+  Completer<void>? _starting;
+  bool _cancelingForLayout = false;
   bool _errorVisible = false;
   bool _closing = false;
   bool _resultOpeningEditor = false;
@@ -108,11 +109,17 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       case 'outputsChanged':
         if (_colorToastTimer?.isActive == true) {
           await _quit();
-        } else if (!_errorVisible && (_initializing || _session != null)) {
+        } else if (!_closing &&
+            !_cancelingForLayout &&
+            (_starting != null || _session != null)) {
+          _cancelingForLayout = true;
           _revision++;
-          _errorVisible = true;
-          await _endCapture();
-          await _showError('The display layout changed. Start a new capture.');
+          debugPrint(
+            'Canceling screenshot because the display layout changed.',
+          );
+          // Let startup release any overlay it is still creating before teardown.
+          await _starting?.future;
+          await _quit();
         }
       case 'overlayEscape':
         await _back();
@@ -132,10 +139,10 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
   }
 
   Future<void> _start() async {
-    if (_closing || _initializing) return;
+    if (_closing || _cancelingForLayout || _starting != null) return;
     widget.onStartupRetryChanged?.call(null);
     final revision = ++_revision;
-    _initializing = true;
+    final starting = _starting = Completer<void>();
     final frozen = <FrozenOutput>[];
     var handedOff = false;
     try {
@@ -143,6 +150,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
         await _quit();
         return;
       }
+      if (!_current(revision)) return;
       if (widget.onFinished != null) {
         await captureWindows.invokeMethod<void>('prefetch');
       }
@@ -287,7 +295,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           output.image.dispose();
         }
       }
-      _initializing = false;
+      _starting = null;
+      starting.complete();
     }
   }
 
@@ -342,8 +351,8 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       if (preferences.action != .openOnly) {
         final format = preferences.defaultFormat;
         try {
-          await _colors.copy(
-            format.format(picked.color, uppercase: preferences.uppercase),
+          await rust.copyText(
+            text: format.format(picked.color, uppercase: preferences.uppercase),
           );
           copied = format;
         } catch (exception) {
@@ -463,7 +472,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
             preferences: _colorPreferences,
             copied: copied,
             error: error,
-            onCopy: _colors.copy,
+            onCopy: (text) => rust.copyText(text: text),
             onRemember: (entry) =>
                 _colors.add(entry, _colorPreferences.historySize),
             onDelete: (entry) =>
@@ -483,7 +492,6 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
           () => unawaited(_quit()),
         );
       } else {
-        await _releaseCaptureLock();
         unawaited(_floatColorWindow(id, output.name, height));
       }
     } catch (_) {
@@ -893,6 +901,8 @@ return "pending"
     } finally {
       _releaseSession(session);
     }
+    // Clipboard owners and result windows can outlive the selection.
+    if (session != null) await _releaseCaptureLock();
   }
 
   void _disposeSession() {
@@ -925,7 +935,6 @@ return "pending"
     final name = _screenshotName(DateTime.now());
     if (request.action == .edit) {
       await _showEditor(image, name);
-      await _releaseCaptureLock();
     } else {
       final receipt = await _copyAndSave(png, name);
       if (_current(revision)) {
@@ -1077,7 +1086,6 @@ return "pending"
       );
       if (id != null) await _removeView(id);
       _resultView = null;
-      await _releaseCaptureLock();
     } catch (error) {
       if (id != null) await _removeView(id);
       _resultView = null;

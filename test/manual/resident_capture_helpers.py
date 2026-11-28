@@ -27,7 +27,8 @@ def overlays():
 
 
 def lock_held():
-    return "top.remya.screen_capture.lock" in output("lslocks", "-nu", "-o", "PATH")
+    path = os.path.join(os.environ["XDG_RUNTIME_DIR"], "top.remya.screen_capture.lock")
+    return path in output("lslocks", "-nu", "-o", "PATH").splitlines()
 
 
 def wait_for(predicate, description):

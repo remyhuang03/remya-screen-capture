@@ -343,7 +343,21 @@ class CaptureWindows {
   };
 
   static void method_call(FlMethodChannel*, FlMethodCall* call, gpointer data) {
-    static_cast<CaptureWindows*>(data)->handle(call);
+    // Flutter can dispatch a method while GTK is painting and waiting for a
+    // frame. Run window changes after that draw has returned to the main loop.
+    auto* host = static_cast<CaptureWindows*>(data);
+    g_object_set_data_full(G_OBJECT(call), kHostKey,
+                           g_object_ref(host->application_), g_object_unref);
+    g_idle_add_full(
+        G_PRIORITY_DEFAULT,
+        +[](gpointer data) -> gboolean {
+          auto* call = FL_METHOD_CALL(data);
+          auto* app = G_OBJECT(g_object_get_data(G_OBJECT(call), kHostKey));
+          auto* host = static_cast<CaptureWindows*>(g_object_get_data(app, kHostKey));
+          if (host != nullptr) host->handle(call);
+          return G_SOURCE_REMOVE;
+        },
+        g_object_ref(call), g_object_unref);
   }
 
   static void open_resident(GDBusConnection*, const gchar*, const gchar*,
