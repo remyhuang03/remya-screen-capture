@@ -106,11 +106,19 @@ Future<void> main(List<String> args) async {
 Widget _captureHost(
   CaptureEntrypoint entrypoint, {
   Future<void> Function()? onFinished,
+  ValueChanged<VoidCallback?>? onStartupRetryChanged,
 }) => switch (entrypoint) {
   .settings => throw StateError('Settings is not a capture session'),
-  .screenshot => CaptureHost(onFinished: onFinished),
+  .screenshot => CaptureHost(
+    onFinished: onFinished,
+    onStartupRetryChanged: onStartupRetryChanged,
+  ),
   .recording => RecordingHost(onFinished: onFinished),
-  .colorPicker => CaptureHost(initialMode: .color, onFinished: onFinished),
+  .colorPicker => CaptureHost(
+    initialMode: .color,
+    onFinished: onFinished,
+    onStartupRetryChanged: onStartupRetryChanged,
+  ),
 };
 
 class _ResidentCapture extends StatefulWidget {
@@ -130,6 +138,7 @@ class _ResidentCaptureState extends State<_ResidentCapture> {
     save: (_) async {},
   );
   CaptureEntrypoint? _entrypoint;
+  VoidCallback? _retryStartup;
   bool _finishing = false;
   bool _quitting = false;
 
@@ -142,6 +151,11 @@ class _ResidentCaptureState extends State<_ResidentCapture> {
       }
       final mode = CaptureEntrypoint.values.byName(call.arguments as String);
       if (_entrypoint != null) {
+        final retry = _retryStartup;
+        if (retry != null && mode == _entrypoint) {
+          retry();
+          return true;
+        }
         return mode == .recording &&
             _entrypoint == .recording &&
             await forwardRecordingShortcut(recordingShortcutPath());
@@ -182,6 +196,7 @@ class _ResidentCaptureState extends State<_ResidentCapture> {
 
   Future<void> _finish() async {
     _finishing = true;
+    _retryStartup = null;
     await captureWindows.invokeMethod<void>('finishSession');
     if (!mounted) return;
     setState(() => _entrypoint = null);
@@ -204,5 +219,9 @@ class _ResidentCaptureState extends State<_ResidentCapture> {
   @override
   Widget build(BuildContext context) => _entrypoint == null
       ? const ViewCollection(views: [])
-      : _captureHost(_entrypoint!, onFinished: _finish);
+      : _captureHost(
+          _entrypoint!,
+          onFinished: _finish,
+          onStartupRetryChanged: (retry) => _retryStartup = retry,
+        );
 }

@@ -5,6 +5,7 @@ Usage: python test/manual/resident_capture_lock.py /path/to/release/bundle/remya
 Temporarily stops the installed resident service, then restores it on exit.
 """
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,7 +13,8 @@ import sys
 import tempfile
 
 from resident_capture_helpers import (
-    cancel_screenshot, idle_outputs, overlays, request_screenshot, resident_reply, wait_for,
+    cancel_screenshot, idle_outputs, lock_held, output, overlays, request_screenshot,
+    resident_reply, wait_for,
 )
 
 UNIT = "top.remya.screen_capture.gui.service"
@@ -27,6 +29,9 @@ def main(bundle):
         cancel_screenshot()
 
     with tempfile.TemporaryDirectory() as directory:
+        grim = Path(directory) / "grim"
+        grim.write_text("#!/bin/sh\nexit 1\n")
+        grim.chmod(0o700)
         fault = Path(directory) / "fault.so"
         source = Path(__file__).with_name("overlay_close_fault.c")
         subprocess.run(["cc", "-shared", "-fPIC", source, "-ldl", "-o", fault], check=True)
@@ -37,7 +42,10 @@ def main(bundle):
             with (Path(directory) / "resident.log").open("w+") as log:
                 resident = subprocess.Popen(
                     [bundle, "--background"],
-                    env={**os.environ, "LD_PRELOAD": str(fault), "REMYA_TEST_FAIL_CLOSE": str(count)},
+                    env={
+                        **os.environ, "PATH": directory + os.pathsep + os.environ["PATH"],
+                        "LD_PRELOAD": str(fault), "REMYA_TEST_FAIL_CLOSE": str(count),
+                    },
                     stdout=log,
                     stderr=log,
                 )
@@ -45,6 +53,13 @@ def main(bundle):
                     wait_for(
                         lambda: resident_reply("invalid") == "b false", "resident service registration"
                     )
+                    request_screenshot()
+                    wait_for(lambda: any(
+                        w["pid"] == resident.pid and w["mapped"]
+                        for w in json.loads(output("hyprctl", "-j", "clients"))
+                    ), "the startup error window")
+                    wait_for(lambda: not lock_held(), "release after startup failure")
+                    grim.unlink()
                     open_and_cancel()
                     log.seek(0)
                     if "Injected overlay close failure" not in log.read():
@@ -65,7 +80,7 @@ def main(bundle):
                         resident.wait()
         finally:
             subprocess.run([*service, "start", UNIT], check=True)
-    print("The resident process released its lock and reopened after a close failure.")
+    print("The resident process released its lock and reopened after startup and close failures.")
 
 
 if __name__ == "__main__":

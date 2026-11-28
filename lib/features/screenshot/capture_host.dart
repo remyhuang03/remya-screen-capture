@@ -28,8 +28,14 @@ import 'capture_session.dart';
 import 'qr_result.dart';
 
 class CaptureHost extends StatefulWidget {
-  const CaptureHost({super.key, this.initialMode = .region, this.onFinished});
+  const CaptureHost({
+    super.key,
+    this.initialMode = .region,
+    this.onFinished,
+    this.onStartupRetryChanged,
+  });
 
+  final ValueChanged<VoidCallback?>? onStartupRetryChanged;
   final CaptureMode initialMode;
   final Future<void> Function()? onFinished;
 
@@ -127,6 +133,7 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
 
   Future<void> _start() async {
     if (_closing || _initializing) return;
+    widget.onStartupRetryChanged?.call(null);
     final revision = ++_revision;
     _initializing = true;
     final frozen = <FrozenOutput>[];
@@ -259,8 +266,21 @@ class _CaptureHostState extends State<CaptureHost> with WidgetsBindingObserver {
       ]);
     } catch (error) {
       if (!_current(revision)) return;
-      await _endCapture();
-      await _showError('Could not start screen capture. ${_message(error)}');
+      final message = 'Could not start screen capture. ${_message(error)}';
+      debugPrint(message);
+      try {
+        await _endCapture();
+      } catch (closeError) {
+        debugPrint('Closing screenshot overlays: ${_message(closeError)}');
+        await _quit();
+        return;
+      }
+      await _releaseCaptureLock();
+      if (!_current(revision)) return;
+      await _showError(message);
+      if (_current(revision)) {
+        widget.onStartupRetryChanged?.call(() => unawaited(_start()));
+      }
     } finally {
       if (!handedOff) {
         for (final output in frozen) {
